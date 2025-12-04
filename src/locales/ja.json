@@ -45,5 +45,6 @@
     "analgesiaMax": "Analgesia Max",
     "analgesiaMin": "Analgesia Min",
     "respRisk": "Resp Risk >",
-    "clockMode": "時間入力モード"
+    "clockMode": "時間入力モード",
+    "now": "現在"
 }
