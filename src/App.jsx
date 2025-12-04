@@ -34,6 +34,12 @@ const THERAPEUTIC_RANGES = {
     analgesiaMax: 15.0,
     respiratoryRisk: 10.0,
     label: 'Analgesia (4.0-15.0)'
+  },
+  'Methadone': {
+    analgesiaMin: 50,
+    analgesiaMax: 100,
+    respiratoryRisk: 200, 
+    label: 'Analgesia (50-100) / Resp Risk > 200'
   }
 };
 
@@ -41,7 +47,8 @@ const CLINICAL_DEFAULTS = {
   'Fentanyl': { bolus: 100, rate: 50, duration: 60, unit: 'mcg' },
   'Remifentanil': { bolus: 0, rate: 1000, duration: 60, unit: 'mcg' },
   'Morphine': { bolus: 5, rate: 2, duration: 120, unit: 'mg' },
-  'Hydromorphone': { bolus: 1, rate: 0.5, duration: 120, unit: 'mg' }
+  'Hydromorphone': { bolus: 1, rate: 0.5, duration: 120, unit: 'mg' },
+  'Methadone': { bolus: 5, rate: 2, duration: 60, unit: 'mg' }
 };
 
 // Define available models for easy iteration
@@ -49,7 +56,8 @@ const AVAILABLE_MODELS = {
   'Fentanyl': ['Bae (2020) Adult', 'Shafer (Adult)', 'Ginsberg (Pediatric)', 'Scott (Peds/Adult)'],
   'Remifentanil': ['Minto (Adult)', 'Rigby-Jones (Pediatric)'],
   'Morphine': ['Maitre (Adult)', 'McFarlan (Pediatric)'],
-  'Hydromorphone': ['Jeleazcov (2014) Adult', 'Balyan (2020) Pediatric', 'Standard (Adult)', 'Pediatric (Scaled)']
+  'Hydromorphone': ['Jeleazcov (2014) Adult', 'Balyan (2020) Pediatric', 'Standard (Adult)', 'Pediatric (Scaled)'],
+  'Methadone': ['Standard (Adult)']
 };
 
 /**
@@ -86,6 +94,24 @@ const estimateGrowth = (age, gender) => {
  * ------------------------------------------------------------------
  */
 
+
+const timeToMinutes = (timeStr, startStr) => {
+  if (!timeStr || !startStr) return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  const [sh, sm] = startStr.split(':').map(Number);
+  return (h * 60 + m) - (sh * 60 + sm);
+};
+
+const minutesToTime = (minutes, startStr) => {
+  if (!startStr) return "00:00";
+  const [sh, sm] = startStr.split(':').map(Number);
+  const totalMin = sh * 60 + sm + minutes;
+  let h = Math.floor(totalMin / 60) % 24;
+  if (h < 0) h += 24;
+  const m = Math.floor(totalMin % 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+};
+
 const calculateLBM = (weight, height, gender) => {
   if (!height || !weight) return weight;
   if (gender === 'male') {
@@ -99,6 +125,7 @@ const getModelRequirements = (drug, model) => {
   if (drug === 'Remifentanil' && model.includes('Minto')) return ['age', 'weight', 'height', 'gender'];
   if (drug === 'Hydromorphone' && model.includes('Jeleazcov')) return ['age', 'weight'];
   if (drug === 'Fentanyl' && model.includes('Shafer')) return [];
+  if (drug === 'Methadone') return ['weight'];
   return ['weight'];
 };
 
@@ -109,6 +136,7 @@ const getBestModel = (drug, age) => {
   if (drug === 'Remifentanil') return isPeds ? 'Rigby-Jones (Pediatric)' : 'Minto (Adult)';
   if (drug === 'Morphine') return isPeds ? 'McFarlan (Pediatric)' : 'Maitre (Adult)';
   if (drug === 'Hydromorphone') return isPeds ? 'Balyan (2020) Pediatric' : 'Jeleazcov (2014) Adult';
+  if (drug === 'Methadone') return 'Standard (Adult)';
   return 'Bae (2020) Adult';
 };
 
@@ -213,6 +241,19 @@ const getPKParameters = (drug, model, patient) => {
       params.V1 = 3.35 * wRatio; params.V2 = 13.9 * wRatio; params.V3 = 145.0 * wRatio; params.Cl = 1.01 * (wRatio ** 0.75); params.Q2 = 1.47 * (wRatio ** 0.75); params.Q3 = 1.41 * (wRatio ** 0.75); params.ke0 = 0.02;
     }
   }
+  // --- METHADONE ---
+  else if (drug === 'Methadone') {
+     // Standardized to 70kg: V1=21.5, V2=75.1, V3=484, CL=9.45 L/h, Q2=325 L/h, Q3=136 L/h
+     // Converted to L/min for CL, Q2, Q3
+     const wRatio = weight / 70;
+     params.V1 = 21.5 * wRatio;
+     params.V2 = 75.1 * wRatio;
+     params.V3 = 484.0 * wRatio;
+     params.Cl = (9.45 / 60) * (wRatio ** 0.75); 
+     params.Q2 = (325.0 / 60) * (wRatio ** 0.75);
+     params.Q3 = (136.0 / 60) * (wRatio ** 0.75);
+     params.ke0 = 0.05; // Estimated, slow equilibration
+  }
 
   if (isNaN(params.V1) || params.V1 <= 0.1) params.V1 = 1.0;
   return params;
@@ -231,7 +272,7 @@ const simulateConcentration = (events, params, durationMinutes, drugType) => {
   const k13 = (V3 > 0) ? Q3 / V1 : 0;
   const k31 = (V3 > 0) ? Q3 / V3 : 0;
 
-  const isMgDrug = drugType === 'Morphine' || drugType === 'Hydromorphone';
+  const isMgDrug = drugType === 'Morphine' || drugType === 'Hydromorphone' || drugType === 'Methadone';
   const scaleFactor = isMgDrug ? 1000 : 1;
 
   let x1 = 0, x2 = 0, x3 = 0, xe = 0;
@@ -325,6 +366,8 @@ const App = () => {
   const [showRanges, setShowRanges] = useState(true);
   const [yAxisMax, setYAxisMax] = useState(6);
   const [isAutoY, setIsAutoY] = useState(true);
+  const [isClockMode, setIsClockMode] = useState(false);
+  const [startTime, setStartTime] = useState("09:00");
   const [editingId, setEditingId] = useState(null);
 
   const activeParams = useMemo(() => getModelRequirements(drug, model), [drug, model]);
@@ -522,10 +565,10 @@ const App = () => {
 
       {/* Header */}
       <header className="bg-slate-800 text-white p-3 shadow-md sticky top-0 z-20">
-        <div className="max-w-5xl mx-auto flex justify-between items-center">
+        <div className="max-w-5xl mx-auto flex flex-wrap justify-between items-center gap-2">
           <div className="flex items-center gap-2">
             <Activity className="h-5 w-5 text-blue-400" />
-            <h1 className="text-lg font-bold">{t('appTitle')}</h1>
+            <h1 className="text-base sm:text-lg font-bold">{t('appTitle')}</h1>
           </div>
           <div className="flex items-center gap-3">
              <div className="flex bg-slate-700 rounded p-1 gap-1">
@@ -606,6 +649,7 @@ const App = () => {
                   domain={[0, simDuration]}
                   tickCount={10}
                   allowDataOverflow
+                  tickFormatter={(val) => isClockMode ? minutesToTime(val, startTime) : val}
                 />
                 <YAxis
                   label={{ value: t('concLabel'), angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
@@ -613,7 +657,7 @@ const App = () => {
                   allowDataOverflow={true}
                 />
                 <Tooltip
-                  labelFormatter={(v) => `${v} min`}
+                  labelFormatter={(v) => isClockMode ? `${minutesToTime(v, startTime)} (${v} min)` : `${v} min`}
                   contentStyle={{ fontSize: '12px', borderRadius: '8px' }}
                 />
                 <Legend verticalAlign="top" height={36} />
@@ -703,6 +747,26 @@ const App = () => {
             {/* Time Axis Controls */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">{t('timeAxis')}</span>
+              <label className="flex items-center gap-1 text-xs cursor-pointer select-none bg-slate-200 px-2 py-1 rounded hover:bg-slate-300 transition-colors mr-2">
+                <Clock className="w-3 h-3 text-slate-600" />
+                <input
+                  type="checkbox"
+                  checked={isClockMode}
+                  onChange={(e) => setIsClockMode(e.target.checked)}
+                  className="accent-blue-600 w-3 h-3"
+                />
+                <span className="font-semibold text-slate-600">{t('clockMode')}</span>
+              </label>
+              
+              {isClockMode && (
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="text-xs border border-slate-300 rounded p-1 mr-2"
+                />
+              )}
+
 
               <div className="flex bg-slate-200 rounded-lg p-0.5 gap-0.5">
                 {[360, 720, 1440].map((scale) => (
@@ -794,6 +858,7 @@ const App = () => {
                     <option value="Remifentanil">Remifentanil (mcg)</option>
                     <option value="Morphine">Morphine (mg)</option>
                     <option value="Hydromorphone">Hydromorphone (mg)</option>
+                    <option value="Methadone">Methadone (mg)</option>
                   </select>
                 </div>
                 <div>
@@ -818,6 +883,9 @@ const App = () => {
                       <option>Balyan (2020) Pediatric</option>
                       <option>Standard (Adult)</option>
                       <option>Pediatric (Scaled)</option>
+                    </>}
+                    {drug === 'Methadone' && <>
+                      <option>Standard (Adult)</option>
                     </>}
                   </select>
                 </div>
@@ -940,7 +1008,16 @@ const App = () => {
                   </div>
                   <div className="w-20">
                     <label className="text-[10px] uppercase text-slate-400 font-bold">{t('time')}</label>
-                    <input type="number" min="0" value={bolusTime} onChange={e => setBolusTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-center" />
+                    {isClockMode ? (
+                      <input 
+                        type="time" 
+                        value={minutesToTime(bolusTime, startTime)} 
+                        onChange={e => setBolusTime(timeToMinutes(e.target.value, startTime))} 
+                        className="w-full border rounded p-2 text-center text-sm" 
+                      />
+                    ) : (
+                      <input type="number" min="0" value={bolusTime} onChange={e => setBolusTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-center" />
+                    )}
                   </div>
                   <button onClick={addBolus} className="bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-lg shadow active:scale-95 transition-transform">
                     {editingId === 'bolus' ? <Save className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
@@ -962,7 +1039,16 @@ const App = () => {
                   </div>
                   <div className="w-16">
                     <label className="text-[10px] uppercase text-slate-400 font-bold">{t('start')}</label>
-                    <input type="number" min="0" value={infusionStartTime} onChange={e => setInfusionStartTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-center" />
+                    {isClockMode ? (
+                      <input 
+                        type="time" 
+                        value={minutesToTime(infusionStartTime, startTime)} 
+                        onChange={e => setInfusionStartTime(timeToMinutes(e.target.value, startTime))} 
+                        className="w-full border rounded p-2 text-center text-sm" 
+                      />
+                    ) : (
+                      <input type="number" min="0" value={infusionStartTime} onChange={e => setInfusionStartTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-center" />
+                    )}
                   </div>
                   <div className="w-16">
                     <label className="text-[10px] uppercase text-slate-400 font-bold">{t('duration')}</label>
