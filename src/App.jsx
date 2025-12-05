@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
@@ -501,6 +500,7 @@ const App = () => {
   }, [patient, drug, model, events, simDuration]);
 
   // --- CALCULATE AUTO Y MAX ---
+  // --- CALCULATE AUTO Y MAX ---
   const calculatedYMax = useMemo(() => {
     if (!isAutoY) return yAxisMax;
     let maxCe = 0;
@@ -520,17 +520,63 @@ const App = () => {
 
   // --- HANDLERS ---
   const addBolus = () => {
-    setEvents([...events, { id: Date.now(), type: 'bolus', time: parseFloat(bolusTime), amount: parseFloat(bolusAmount) }]);
+    let newTime = parseFloat(bolusTime);
+    let currentEvents = [...events];
+
+    if (isClockMode && newTime < 0) {
+      const offset = -newTime;
+      // Shift start time back
+      const [sh, sm] = startTime.split(':').map(Number);
+      let totalStartMin = sh * 60 + sm - offset;
+      if (totalStartMin < 0) totalStartMin += 24 * 60;
+
+      const newH = Math.floor(totalStartMin / 60);
+      const newM = totalStartMin % 60;
+      setStartTime(`${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`);
+
+      // Shift existing events forward
+      currentEvents = currentEvents.map(e => ({
+        ...e,
+        time: e.time + offset
+      }));
+
+      newTime = 0; // The new event is now at 0
+    }
+
+    setEvents([...currentEvents, { id: Date.now(), type: 'bolus', time: newTime, amount: parseFloat(bolusAmount) }]);
     setEditingId(null);
   };
 
   const addInfusion = () => {
-    setEvents([...events, {
+    let newStartTime = parseFloat(infusionStartTime);
+    let currentEvents = [...events];
+
+    if (isClockMode && newStartTime < 0) {
+      const offset = -newStartTime;
+      // Shift start time back
+      const [sh, sm] = startTime.split(':').map(Number);
+      let totalStartMin = sh * 60 + sm - offset;
+      if (totalStartMin < 0) totalStartMin += 24 * 60;
+
+      const newH = Math.floor(totalStartMin / 60);
+      const newM = totalStartMin % 60;
+      setStartTime(`${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`);
+
+      // Shift existing events forward
+      currentEvents = currentEvents.map(e => ({
+        ...e,
+        time: e.time + offset
+      }));
+
+      newStartTime = 0; // The new event starts at 0
+    }
+
+    setEvents([...currentEvents, {
       id: Date.now(),
       type: 'infusion',
-      time: parseFloat(infusionStartTime),
+      time: newStartTime,
       rate: parseFloat(infusionRate),
-      duration: isInfiniteDuration ? (simDuration - infusionStartTime + 60) : parseFloat(infusionDuration)
+      duration: isInfiniteDuration ? (simDuration - newStartTime + 60) : parseFloat(infusionDuration)
     }]);
     setEditingId(null);
   };
@@ -799,18 +845,20 @@ const App = () => {
               </LineChart>
             </ResponsiveContainer>
 
-            {isClockMode && currentValues && currentSimMinutes >= 0 && currentSimMinutes <= simDuration && (
-              <div className="absolute top-2 right-14 bg-white/90 p-2 rounded shadow border border-red-200 text-xs pointer-events-none">
-                <div className="font-bold text-red-600 flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                  {t('now')} ({currentTime.getHours().toString().padStart(2, '0')}:{currentTime.getMinutes().toString().padStart(2, '0')})
+            {
+              isClockMode && currentValues && currentSimMinutes >= 0 && currentSimMinutes <= simDuration && (
+                <div className="absolute top-2 right-14 bg-white/90 p-2 rounded shadow border border-red-200 text-xs pointer-events-none">
+                  <div className="font-bold text-red-600 flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                    {t('now')} ({currentTime.getHours().toString().padStart(2, '0')}:{currentTime.getMinutes().toString().padStart(2, '0')})
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-2 mt-1 text-slate-600">
+                    <span>Cp:</span> <span className="font-mono font-bold">{currentValues.cp}</span>
+                    <span>Ce:</span> <span className="font-mono font-bold">{currentValues.ce}</span>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-x-2 mt-1 text-slate-600">
-                  <span>Cp:</span> <span className="font-mono font-bold">{currentValues.cp}</span>
-                  <span>Ce:</span> <span className="font-mono font-bold">{currentValues.ce}</span>
-                </div>
-              </div>
-            )}
+              )
+            }
           </div>
 
           {/* Axis Controls */}
@@ -827,7 +875,6 @@ const App = () => {
                     setIsClockMode(e.target.checked);
                     if (e.target.checked) {
                       const now = new Date();
-                      now.setMinutes(now.getMinutes() - 30);
                       const h = String(now.getHours()).padStart(2, '0');
                       const m = String(now.getMinutes()).padStart(2, '0');
                       setStartTime(`${h}:${m}`);
@@ -838,14 +885,16 @@ const App = () => {
                 <span className="font-semibold text-slate-600">{t('clockMode')}</span>
               </label>
 
-              {isClockMode && (
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="text-xs border border-slate-300 rounded p-1 mr-2"
-                />
-              )}
+              {
+                isClockMode && (
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="text-xs border border-slate-300 rounded p-1 mr-2"
+                  />
+                )
+              }
 
 
               <div className="flex bg-slate-200 rounded-lg p-0.5 gap-0.5">
@@ -905,26 +954,28 @@ const App = () => {
                 {isAutoY ? t('autoCe') : `${yAxisMax} ng/ml`}
               </span>
             </div>
-          </div>
+          </div >
 
-          {savedTraces.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {savedTraces.map(t => (
-                <div key={t.id} className="flex items-center gap-2 bg-slate-100 px-2 py-1 rounded-full text-xs border border-slate-200">
-                  <div className="w-2 h-2 rounded-full" style={{ background: t.color }}></div>
-                  <span className="font-medium">{t.name}</span>
-                  <button onClick={() => removeTrace(t.id)} className="text-slate-400 hover:text-red-500"><X className="w-3 h-3" /></button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+          {
+            savedTraces.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {savedTraces.map(t => (
+                  <div key={t.id} className="flex items-center gap-2 bg-slate-100 px-2 py-1 rounded-full text-xs border border-slate-200">
+                    <div className="w-2 h-2 rounded-full" style={{ background: t.color }}></div>
+                    <span className="font-medium">{t.name}</span>
+                    <button onClick={() => removeTrace(t.id)} className="text-slate-400 hover:text-red-500"><X className="w-3 h-3" /></button>
+                  </div>
+                ))}
+              </div>
+            )
+          }
+        </div >
 
         {/* --- CONTROLS SECTION --- */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        < div className="grid grid-cols-1 lg:grid-cols-12 gap-4" >
 
           {/* Left Column: Patient & Model (4 cols) */}
-          <div className="lg:col-span-4 space-y-4">
+          < div className="lg:col-span-4 space-y-4" >
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
               <div className="flex items-center gap-2 mb-3 text-emerald-600 border-b pb-2">
                 <Settings className="h-4 w-4" />
@@ -1068,12 +1119,12 @@ const App = () => {
                 <span>{t('modelParamsNote')}</span>
               </div>
             </div>
-          </div>
+          </div >
 
           {/* Right Column: Dosing & History (8 cols) */}
-          <div className="lg:col-span-8 space-y-4">
+          < div className="lg:col-span-8 space-y-4" >
             {/* Dosing Inputs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            < div className="grid grid-cols-1 md:grid-cols-2 gap-4" >
               <div className={`p-4 rounded-xl shadow-sm border transition-colors ${editingId === 'bolus' ? 'bg-purple-50 border-purple-200' : 'bg-white border-slate-200'}`}>
                 <div className="flex items-center gap-2 mb-3 text-purple-600">
                   <Syringe className="h-4 w-4" />
@@ -1139,7 +1190,7 @@ const App = () => {
                       </label>
                     </label>
                     {isInfiniteDuration ? (
-                      <div className="w-full border rounded p-2 text-center text-slate-400 bg-slate-50 text-xl flex items-center justify-center h-[38px]">∞</div>
+                      <div className="w-full border rounded p-2 text-center text-slate-400 bg-slate-50 text-xl flex items-center justify-center h-[38px]">∁E/div>
                     ) : (
                       isClockMode ? (
                         <input
@@ -1162,38 +1213,38 @@ const App = () => {
                     {editingId === 'infusion' ? <Save className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
                   </button>
                 </div>
-              </div>
-            </div>
+                </div>
+              </div >
 
-            {/* Event List */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="bg-slate-50 p-2 px-4 border-b border-slate-200 flex justify-between items-center">
-                <h3 className="font-bold text-sm text-slate-600">{t('currentSchedule')}</h3>
-                <button onClick={() => setEvents([])} className="text-xs text-red-500 hover:underline">{t('clearAll')}</button>
-              </div>
-              <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
-                {events.length === 0 && <div className="p-4 text-center text-slate-400 text-xs">{t('noHistory')}</div>}
-                {events.sort((a, b) => a.time - b.time).map(evt => (
-                  <div key={evt.id} className="p-2 px-4 flex justify-between items-center text-sm hover:bg-slate-50">
-                    <div className="flex items-center gap-3">
-                      {evt.type === 'bolus' ? <Syringe className="w-4 h-4 text-purple-500" /> : <Activity className="w-4 h-4 text-orange-500" />}
-                      <span className="font-mono text-slate-500 w-12 text-right">{evt.time} min</span>
-                      <span className="font-medium text-slate-700">
-                        {evt.type === 'bolus' ? `${t('bolusLabel')}: ${evt.amount} ${getDoseUnit()}` : `${t('infusionLabel')}: ${evt.rate} ${getDoseUnit()}/hr (${evt.duration}min)`}
-                      </span>
+              {/* Event List */}
+              < div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" >
+                <div className="bg-slate-50 p-2 px-4 border-b border-slate-200 flex justify-between items-center">
+                  <h3 className="font-bold text-sm text-slate-600">{t('currentSchedule')}</h3>
+                  <button onClick={() => setEvents([])} className="text-xs text-red-500 hover:underline">{t('clearAll')}</button>
+                </div>
+                <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
+                  {events.length === 0 && <div className="p-4 text-center text-slate-400 text-xs">{t('noHistory')}</div>}
+                  {events.sort((a, b) => a.time - b.time).map(evt => (
+                    <div key={evt.id} className="p-2 px-4 flex justify-between items-center text-sm hover:bg-slate-50">
+                      <div className="flex items-center gap-3">
+                        {evt.type === 'bolus' ? <Syringe className="w-4 h-4 text-purple-500" /> : <Activity className="w-4 h-4 text-orange-500" />}
+                        <span className="font-mono text-slate-500 w-12 text-right">{evt.time} min</span>
+                        <span className="font-medium text-slate-700">
+                          {evt.type === 'bolus' ? `${t('bolusLabel')}: ${evt.amount} ${getDoseUnit()}` : `${t('infusionLabel')}: ${evt.rate} ${getDoseUnit()}/hr (${evt.duration}min)`}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => editEvent(evt)} title={t('editTooltip')} className="text-slate-300 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded"><Edit2 className="w-4 h-4" /></button>
+                        <button onClick={() => setEvents(events.filter(e => e.id !== evt.id))} title={t('deleteTooltip')} className="text-slate-300 hover:text-red-500 p-1.5 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => editEvent(evt)} title={t('editTooltip')} className="text-slate-300 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded"><Edit2 className="w-4 h-4" /></button>
-                      <button onClick={() => setEvents(events.filter(e => e.id !== evt.id))} title={t('deleteTooltip')} className="text-slate-300 hover:text-red-500 p-1.5 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-    </div>
+                  ))}
+                </div>
+              </div >
+            </div >
+          </div >
+      </main >
+    </div >
   );
 };
 
