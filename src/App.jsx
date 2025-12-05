@@ -1131,15 +1131,15 @@ const App = () => {
                     )}
                   </div>
                   <div className="w-24">
-                    <label className="text-[10px] uppercase text-slate-400 font-bold flex justify-between">
+                    <label className="text-[10px] uppercase text-slate-400 font-bold flex flex-col">
                       <span>{t('duration')}</span>
                       <label className="flex items-center gap-0.5 cursor-pointer">
                         <input type="checkbox" checked={isInfiniteDuration} onChange={e => setIsInfiniteDuration(e.target.checked)} className="accent-orange-600 w-3 h-3" />
-                        <span className="text-[8px] normal-case">∞</span>
+                        <span className="text-[9px] normal-case whitespace-nowrap text-slate-600">{t('indefinite')}</span>
                       </label>
                     </label>
                     {isInfiniteDuration ? (
-                      <div className="w-full border rounded p-2 text-center text-slate-400 bg-slate-50 text-xs flex items-center justify-center h-[38px]">{t('indefinite') || '無期限'}</div>
+                      <div className="w-full border rounded p-2 text-center text-slate-400 bg-slate-50 text-xl flex items-center justify-center h-[38px]">∞</div>
                     ) : (
                       isClockMode ? (
                         <input

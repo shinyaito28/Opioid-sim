@@ -46,5 +46,6 @@
     "analgesiaMin": "Analgesia Min",
     "respRisk": "Resp Risk >",
     "clockMode": "Clock Mode",
-    "now": "Now"
+    "now": "Now",
+    "indefinite": "Indefinite"
 }
