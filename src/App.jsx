@@ -1190,7 +1190,7 @@ const App = () => {
                       </label>
                     </label>
                     {isInfiniteDuration ? (
-                      <div className="w-full border rounded p-2 text-center text-slate-400 bg-slate-50 text-xl flex items-center justify-center h-[38px]">∁E/div>
+                      <div className="w-full border rounded p-2 text-center text-slate-400 bg-slate-50 text-xl flex items-center justify-center h-[38px]">∞</div>
                     ) : (
                       isClockMode ? (
                         <input
@@ -1213,36 +1213,36 @@ const App = () => {
                     {editingId === 'infusion' ? <Save className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
                   </button>
                 </div>
-                </div>
-              </div >
+              </div>
+            </div >
 
-              {/* Event List */}
-              < div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" >
-                <div className="bg-slate-50 p-2 px-4 border-b border-slate-200 flex justify-between items-center">
-                  <h3 className="font-bold text-sm text-slate-600">{t('currentSchedule')}</h3>
-                  <button onClick={() => setEvents([])} className="text-xs text-red-500 hover:underline">{t('clearAll')}</button>
-                </div>
-                <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
-                  {events.length === 0 && <div className="p-4 text-center text-slate-400 text-xs">{t('noHistory')}</div>}
-                  {events.sort((a, b) => a.time - b.time).map(evt => (
-                    <div key={evt.id} className="p-2 px-4 flex justify-between items-center text-sm hover:bg-slate-50">
-                      <div className="flex items-center gap-3">
-                        {evt.type === 'bolus' ? <Syringe className="w-4 h-4 text-purple-500" /> : <Activity className="w-4 h-4 text-orange-500" />}
-                        <span className="font-mono text-slate-500 w-12 text-right">{evt.time} min</span>
-                        <span className="font-medium text-slate-700">
-                          {evt.type === 'bolus' ? `${t('bolusLabel')}: ${evt.amount} ${getDoseUnit()}` : `${t('infusionLabel')}: ${evt.rate} ${getDoseUnit()}/hr (${evt.duration}min)`}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => editEvent(evt)} title={t('editTooltip')} className="text-slate-300 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded"><Edit2 className="w-4 h-4" /></button>
-                        <button onClick={() => setEvents(events.filter(e => e.id !== evt.id))} title={t('deleteTooltip')} className="text-slate-300 hover:text-red-500 p-1.5 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
-                      </div>
+            {/* Event List */}
+            < div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" >
+              <div className="bg-slate-50 p-2 px-4 border-b border-slate-200 flex justify-between items-center">
+                <h3 className="font-bold text-sm text-slate-600">{t('currentSchedule')}</h3>
+                <button onClick={() => setEvents([])} className="text-xs text-red-500 hover:underline">{t('clearAll')}</button>
+              </div>
+              <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
+                {events.length === 0 && <div className="p-4 text-center text-slate-400 text-xs">{t('noHistory')}</div>}
+                {events.sort((a, b) => a.time - b.time).map(evt => (
+                  <div key={evt.id} className="p-2 px-4 flex justify-between items-center text-sm hover:bg-slate-50">
+                    <div className="flex items-center gap-3">
+                      {evt.type === 'bolus' ? <Syringe className="w-4 h-4 text-purple-500" /> : <Activity className="w-4 h-4 text-orange-500" />}
+                      <span className="font-mono text-slate-500 w-12 text-right">{evt.time} min</span>
+                      <span className="font-medium text-slate-700">
+                        {evt.type === 'bolus' ? `${t('bolusLabel')}: ${evt.amount} ${getDoseUnit()}` : `${t('infusionLabel')}: ${evt.rate} ${getDoseUnit()}/hr (${evt.duration}min)`}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              </div >
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => editEvent(evt)} title={t('editTooltip')} className="text-slate-300 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded"><Edit2 className="w-4 h-4" /></button>
+                      <button onClick={() => setEvents(events.filter(e => e.id !== evt.id))} title={t('deleteTooltip')} className="text-slate-300 hover:text-red-500 p-1.5 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div >
           </div >
+        </div >
       </main >
     </div >
   );
