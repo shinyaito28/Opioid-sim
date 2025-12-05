@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
@@ -699,7 +700,7 @@ const App = () => {
                 <XAxis
                   dataKey="time"
                   type="number"
-                  domain={[isClockMode ? -30 : 0, simDuration]}
+                  domain={[0, simDuration]}
                   tickCount={10}
                   allowDataOverflow
                   tickFormatter={(val) => isClockMode ? minutesToTime(val, startTime) : val}
@@ -822,7 +823,16 @@ const App = () => {
                 <input
                   type="checkbox"
                   checked={isClockMode}
-                  onChange={(e) => setIsClockMode(e.target.checked)}
+                  onChange={(e) => {
+                    setIsClockMode(e.target.checked);
+                    if (e.target.checked) {
+                      const now = new Date();
+                      now.setMinutes(now.getMinutes() - 30);
+                      const h = String(now.getHours()).padStart(2, '0');
+                      const m = String(now.getMinutes()).padStart(2, '0');
+                      setStartTime(`${h}:${m}`);
+                    }
+                  }}
                   className="accent-blue-600 w-3 h-3"
                 />
                 <span className="font-semibold text-slate-600">{t('clockMode')}</span>
@@ -1129,7 +1139,7 @@ const App = () => {
                       </label>
                     </label>
                     {isInfiniteDuration ? (
-                      <div className="w-full border rounded p-2 text-center text-slate-400 bg-slate-50 text-sm">∞</div>
+                      <div className="w-full border rounded p-2 text-center text-slate-400 bg-slate-50 text-xs flex items-center justify-center h-[38px]">{t('indefinite') || '無期限'}</div>
                     ) : (
                       isClockMode ? (
                         <input
