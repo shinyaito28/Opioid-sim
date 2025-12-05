@@ -38,7 +38,7 @@ const THERAPEUTIC_RANGES = {
   'Methadone': {
     analgesiaMin: 50,
     analgesiaMax: 100,
-    respiratoryRisk: 200, 
+    respiratoryRisk: 200,
     label: 'Analgesia (50-100) / Resp Risk > 200'
   }
 };
@@ -108,7 +108,8 @@ const minutesToTime = (minutes, startStr) => {
   const totalMin = sh * 60 + sm + minutes;
   let h = Math.floor(totalMin / 60) % 24;
   if (h < 0) h += 24;
-  const m = Math.floor(totalMin % 60);
+  let m = Math.floor(totalMin % 60);
+  if (m < 0) m += 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 };
 
@@ -138,6 +139,18 @@ const getBestModel = (drug, age) => {
   if (drug === 'Hydromorphone') return isPeds ? 'Balyan (2020) Pediatric' : 'Jeleazcov (2014) Adult';
   if (drug === 'Methadone') return 'Standard (Adult)';
   return 'Bae (2020) Adult';
+};
+
+const estimateBolus = (drug, weight) => {
+  let dose = 0;
+  if (drug === 'Fentanyl') dose = weight * 1.5;
+  else if (drug === 'Remifentanil') dose = 0;
+  else if (drug === 'Morphine') dose = weight * 0.1;
+  else if (drug === 'Hydromorphone') dose = weight * 0.02;
+  else if (drug === 'Methadone') dose = weight * 0.1;
+
+  if (dose === 0) return 0;
+  return parseFloat(dose.toPrecision(1));
 };
 
 const getPKParameters = (drug, model, patient) => {
@@ -243,16 +256,16 @@ const getPKParameters = (drug, model, patient) => {
   }
   // --- METHADONE ---
   else if (drug === 'Methadone') {
-     // Standardized to 70kg: V1=21.5, V2=75.1, V3=484, CL=9.45 L/h, Q2=325 L/h, Q3=136 L/h
-     // Converted to L/min for CL, Q2, Q3
-     const wRatio = weight / 70;
-     params.V1 = 21.5 * wRatio;
-     params.V2 = 75.1 * wRatio;
-     params.V3 = 484.0 * wRatio;
-     params.Cl = (9.45 / 60) * (wRatio ** 0.75); 
-     params.Q2 = (325.0 / 60) * (wRatio ** 0.75);
-     params.Q3 = (136.0 / 60) * (wRatio ** 0.75);
-     params.ke0 = 0.05; // Estimated, slow equilibration
+    // Standardized to 70kg: V1=21.5, V2=75.1, V3=484, CL=9.45 L/h, Q2=325 L/h, Q3=136 L/h
+    // Converted to L/min for CL, Q2, Q3
+    const wRatio = weight / 70;
+    params.V1 = 21.5 * wRatio;
+    params.V2 = 75.1 * wRatio;
+    params.V3 = 484.0 * wRatio;
+    params.Cl = (9.45 / 60) * (wRatio ** 0.75);
+    params.Q2 = (325.0 / 60) * (wRatio ** 0.75);
+    params.Q3 = (136.0 / 60) * (wRatio ** 0.75);
+    params.ke0 = 0.05; // Estimated, slow equilibration
   }
 
   if (isNaN(params.V1) || params.V1 <= 0.1) params.V1 = 1.0;
@@ -351,6 +364,7 @@ const App = () => {
   const [infusionRate, setInfusionRate] = useState(CLINICAL_DEFAULTS['Fentanyl'].rate);
   const [infusionStartTime, setInfusionStartTime] = useState(0);
   const [infusionDuration, setInfusionDuration] = useState(60);
+  const [isInfiniteDuration, setIsInfiniteDuration] = useState(true);
 
   const [events, setEvents] = useState([
     { id: 1, type: 'bolus', time: 0, amount: CLINICAL_DEFAULTS['Fentanyl'].bolus }
@@ -400,7 +414,7 @@ const App = () => {
     const [startH, startM] = startTime.split(':').map(Number);
     const start = new Date(now);
     start.setHours(startH, startM, 0, 0);
-    
+
     // If start time is in future relative to now (e.g. set 09:00 when it's 08:00), 
     // usually implies previous day, but for sim simplicity we just take diff.
     // If diff is negative, it means we are before start time.
@@ -438,6 +452,14 @@ const App = () => {
 
   }, [drug, patient.age]);
 
+  // --- EFFECT: Auto-Fill Bolus on Weight/Drug Change ---
+  useEffect(() => {
+    if (autoFillStats) {
+      const newBolus = estimateBolus(drug, patient.weight);
+      setBolusAmount(newBolus);
+    }
+  }, [drug, patient.weight, autoFillStats]);
+
   // --- EFFECT: Set Defaults on Drug Change ---
   useEffect(() => {
     const isPeds = patient.age < 12;
@@ -447,6 +469,7 @@ const App = () => {
       setBolusAmount(Math.round(defs.bolus * scale * 10) / 10);
       setInfusionRate(Math.round(defs.rate * scale * 10) / 10);
       setInfusionDuration(defs.duration);
+      setIsInfiniteDuration(true);
     }
     setIsAutoY(true);
     setEvents([]);
@@ -506,7 +529,7 @@ const App = () => {
       type: 'infusion',
       time: parseFloat(infusionStartTime),
       rate: parseFloat(infusionRate),
-      duration: parseFloat(infusionDuration)
+      duration: isInfiniteDuration ? (simDuration - infusionStartTime + 60) : parseFloat(infusionDuration)
     }]);
     setEditingId(null);
   };
@@ -523,6 +546,7 @@ const App = () => {
       setInfusionRate(evt.rate);
       setInfusionStartTime(evt.time);
       setInfusionDuration(evt.duration);
+      setIsInfiniteDuration(false);
       setEditingId('infusion');
     }
   };
@@ -600,30 +624,30 @@ const App = () => {
             <h1 className="text-base sm:text-lg font-bold">{t('appTitle')}</h1>
           </div>
           <div className="flex items-center gap-3">
-             <div className="flex bg-slate-700 rounded p-1 gap-1">
-                <button 
-                  onClick={() => i18n.changeLanguage('en')}
-                  className={`px-2 py-0.5 text-xs rounded ${i18n.language === 'en' ? 'bg-blue-500 text-white' : 'text-slate-300 hover:bg-slate-600'}`}
-                >
-                  EN
-                </button>
-                <button 
-                  onClick={() => i18n.changeLanguage('ja')}
-                  className={`px-2 py-0.5 text-xs rounded ${i18n.language === 'ja' ? 'bg-blue-500 text-white' : 'text-slate-300 hover:bg-slate-600'}`}
-                >
-                  JP
-                </button>
-             </div>
-             <button 
-               onClick={() => setShowRanges(!showRanges)}
-               className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded flex items-center gap-1"
-             >
-               {showRanges ? <Eye className="w-3 h-3"/> : <EyeOff className="w-3 h-3"/>} 
-               <span className="hidden sm:inline">{t('ranges')}</span>
-             </button>
-             <div className="text-xs bg-red-900/50 text-red-200 px-2 py-1 rounded border border-red-800 hidden sm:block">
-               {t('forResearchOnly')}
-             </div>
+            <div className="flex bg-slate-700 rounded p-1 gap-1">
+              <button
+                onClick={() => i18n.changeLanguage('en')}
+                className={`px-2 py-0.5 text-xs rounded ${i18n.language === 'en' ? 'bg-blue-500 text-white' : 'text-slate-300 hover:bg-slate-600'}`}
+              >
+                EN
+              </button>
+              <button
+                onClick={() => i18n.changeLanguage('ja')}
+                className={`px-2 py-0.5 text-xs rounded ${i18n.language === 'ja' ? 'bg-blue-500 text-white' : 'text-slate-300 hover:bg-slate-600'}`}
+              >
+                JP
+              </button>
+            </div>
+            <button
+              onClick={() => setShowRanges(!showRanges)}
+              className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded flex items-center gap-1"
+            >
+              {showRanges ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+              <span className="hidden sm:inline">{t('ranges')}</span>
+            </button>
+            <div className="text-xs bg-red-900/50 text-red-200 px-2 py-1 rounded border border-red-800 hidden sm:block">
+              {t('forResearchOnly')}
+            </div>
           </div>
         </div>
       </header>
@@ -675,7 +699,7 @@ const App = () => {
                 <XAxis
                   dataKey="time"
                   type="number"
-                  domain={[0, simDuration]}
+                  domain={[isClockMode ? -30 : 0, simDuration]}
                   tickCount={10}
                   allowDataOverflow
                   tickFormatter={(val) => isClockMode ? minutesToTime(val, startTime) : val}
@@ -685,10 +709,10 @@ const App = () => {
                   domain={[0, calculatedYMax]}
                   allowDataOverflow={true}
                 />
-                                {isClockMode && currentSimMinutes !== null && currentSimMinutes >= 0 && currentSimMinutes <= simDuration && (
+                {isClockMode && currentSimMinutes !== null && currentSimMinutes >= 0 && currentSimMinutes <= simDuration && (
                   <ReferenceLine x={currentSimMinutes} stroke="#ef4444" strokeDasharray="3 3" />
                 )}
-                
+
                 <Tooltip
                   labelFormatter={(v) => isClockMode ? `${minutesToTime(v, startTime)} (${v} min)` : `${v} min`}
                   contentStyle={{ fontSize: '12px', borderRadius: '8px' }}
@@ -773,7 +797,7 @@ const App = () => {
 
               </LineChart>
             </ResponsiveContainer>
-            
+
             {isClockMode && currentValues && currentSimMinutes >= 0 && currentSimMinutes <= simDuration && (
               <div className="absolute top-2 right-14 bg-white/90 p-2 rounded shadow border border-red-200 text-xs pointer-events-none">
                 <div className="font-bold text-red-600 flex items-center gap-1">
@@ -803,7 +827,7 @@ const App = () => {
                 />
                 <span className="font-semibold text-slate-600">{t('clockMode')}</span>
               </label>
-              
+
               {isClockMode && (
                 <input
                   type="time"
@@ -1055,11 +1079,11 @@ const App = () => {
                   <div className="w-20">
                     <label className="text-[10px] uppercase text-slate-400 font-bold">{t('time')}</label>
                     {isClockMode ? (
-                      <input 
-                        type="time" 
-                        value={minutesToTime(bolusTime, startTime)} 
-                        onChange={e => setBolusTime(timeToMinutes(e.target.value, startTime))} 
-                        className="w-full border rounded p-2 text-center text-sm" 
+                      <input
+                        type="time"
+                        value={minutesToTime(bolusTime, startTime)}
+                        onChange={e => setBolusTime(timeToMinutes(e.target.value, startTime))}
+                        className="w-full border rounded p-2 text-center text-sm"
                       />
                     ) : (
                       <input type="number" min="0" value={bolusTime} onChange={e => setBolusTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-center" />
@@ -1086,19 +1110,43 @@ const App = () => {
                   <div className="w-16">
                     <label className="text-[10px] uppercase text-slate-400 font-bold">{t('start')}</label>
                     {isClockMode ? (
-                      <input 
-                        type="time" 
-                        value={minutesToTime(infusionStartTime, startTime)} 
-                        onChange={e => setInfusionStartTime(timeToMinutes(e.target.value, startTime))} 
-                        className="w-full border rounded p-2 text-center text-sm" 
+                      <input
+                        type="time"
+                        value={minutesToTime(infusionStartTime, startTime)}
+                        onChange={e => setInfusionStartTime(timeToMinutes(e.target.value, startTime))}
+                        className="w-full border rounded p-2 text-center text-sm"
                       />
                     ) : (
                       <input type="number" min="0" value={infusionStartTime} onChange={e => setInfusionStartTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-center" />
                     )}
                   </div>
-                  <div className="w-16">
-                    <label className="text-[10px] uppercase text-slate-400 font-bold">{t('duration')}</label>
-                    <input type="number" min="0" value={infusionDuration} onChange={e => setInfusionDuration(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-center" />
+                  <div className="w-24">
+                    <label className="text-[10px] uppercase text-slate-400 font-bold flex justify-between">
+                      <span>{t('duration')}</span>
+                      <label className="flex items-center gap-0.5 cursor-pointer">
+                        <input type="checkbox" checked={isInfiniteDuration} onChange={e => setIsInfiniteDuration(e.target.checked)} className="accent-orange-600 w-3 h-3" />
+                        <span className="text-[8px] normal-case">∞</span>
+                      </label>
+                    </label>
+                    {isInfiniteDuration ? (
+                      <div className="w-full border rounded p-2 text-center text-slate-400 bg-slate-50 text-sm">∞</div>
+                    ) : (
+                      isClockMode ? (
+                        <input
+                          type="time"
+                          value={minutesToTime(infusionStartTime + infusionDuration, startTime)}
+                          onChange={e => {
+                            let endMin = timeToMinutes(e.target.value, startTime);
+                            let dur = endMin - infusionStartTime;
+                            if (dur < 0) dur += 1440;
+                            setInfusionDuration(dur);
+                          }}
+                          className="w-full border rounded p-2 text-center text-sm"
+                        />
+                      ) : (
+                        <input type="number" min="0" value={infusionDuration} onChange={e => setInfusionDuration(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-center" />
+                      )
+                    )}
                   </div>
                   <button onClick={addInfusion} className="bg-orange-600 hover:bg-orange-700 text-white p-3 rounded-lg shadow active:scale-95 transition-transform">
                     {editingId === 'infusion' ? <Save className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
