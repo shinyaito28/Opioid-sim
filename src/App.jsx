@@ -429,6 +429,24 @@ const App = () => {
     return point || null;
   }, [currentSimMinutes, simData]);
 
+  // --- EFFECT: Sync Dose Time with Real Time in Clock Mode ---
+  useEffect(() => {
+    if (isClockMode && currentSimMinutes !== null) {
+      const shouldUpdate = (prev) => {
+        // Update if value is 0 (initial) or matches previous minute (tracking)
+        // Allow small jitter (1-2 min) to handle update timing
+        if (prev === 0) return true;
+        const diff = Math.abs(prev - currentSimMinutes);
+        // If difference is 0 or 1, we are tracking. 
+        // We also check against (current - 1) for the transition moment.
+        return diff <= 1 || Math.abs(prev - (currentSimMinutes - 1)) <= 1;
+      };
+
+      setBolusTime(prev => shouldUpdate(prev) ? currentSimMinutes : prev);
+      setInfusionStartTime(prev => shouldUpdate(prev) ? currentSimMinutes : prev);
+    }
+  }, [currentSimMinutes, isClockMode]);
+
   // --- EFFECT: Auto-Fill Stats on Age Change ---
   useEffect(() => {
     if (autoFillStats) {
@@ -944,9 +962,14 @@ const App = () => {
                 <span>{t('autoY')}</span>
               </label>
               <input
-                type="range" min="1" max="100" step="1"
-                value={yAxisMax}
-                onChange={(e) => { setYAxisMax(Number(e.target.value)); setIsAutoY(false); }}
+                type="range" min="1" max="150" step="1"
+                value={Math.sqrt(yAxisMax) * 10}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  const newMax = (val / 10) ** 2;
+                  setYAxisMax(Math.round(newMax * 10) / 10);
+                  setIsAutoY(false);
+                }}
                 disabled={isAutoY && false}
                 className={`w-24 md:w-32 accent-pink-500 ${isAutoY ? 'opacity-50' : 'opacity-100'}`}
               />
