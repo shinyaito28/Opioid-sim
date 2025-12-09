@@ -47,5 +47,9 @@
     "respRisk": "Resp Risk >",
     "clockMode": "時間入力モード",
     "now": "現在",
-    "indefinite": "Indefinite"
+    "indefinite": "無制限",
+    "saveCase": "症例を保存",
+    "savedCases": "保存された症例",
+    "load": "復元",
+    "saveScenarioTooltip": "現在の患者・投与情報を症例として保存します"
 }

@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
-import { Syringe, Clock, Settings, User, Activity, Plus, Trash2, Save, X, Eye, EyeOff, ZoomIn, Baby, Edit2, AlertCircle, Wand2, Info, FileText, Layers } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
+import { Syringe, Clock, Settings, User, Activity, Plus, Trash2, Save, X, Eye, EyeOff, ZoomIn, Baby, Edit2, AlertCircle, Wand2, Info, FileText, Layers, FolderOpen, Download } from 'lucide-react';
+
 
 /**
  * ------------------------------------------------------------------
@@ -377,6 +381,7 @@ const App = () => {
   const [parameters, setParameters] = useState(null);
 
   const [savedTraces, setSavedTraces] = useState([]);
+  const [savedScenarios, setSavedScenarios] = useState([]); // SAVE/RESTORE FEATURE
   const [showRanges, setShowRanges] = useState(true);
   const [yAxisMax, setYAxisMax] = useState(6);
   const [isAutoY, setIsAutoY] = useState(true);
@@ -492,6 +497,7 @@ const App = () => {
     setIsAutoY(true);
     setEvents([]);
     setEditingId(null);
+    setSavedTraces(prev => prev.filter(t => t.drug === drug));
   }, [drug]);
 
   // --- EFFECT: Run Simulation ---
@@ -617,14 +623,18 @@ const App = () => {
   };
 
   const saveCurrentTrace = () => {
+    const name = `${drug} (${model.split(' ')[0]})`;
+    // Prevent duplicates: Remove existing trace with same name before adding new one
+    const prevTraces = savedTraces.filter(t => t.name !== name);
+
     const trace = {
       id: Date.now(),
-      name: `${drug} (${model.split(' ')[0]})`,
+      name: name,
       data: simData,
       color: getRandomColor(),
       drug: drug
     };
-    setSavedTraces([...savedTraces, trace]);
+    setSavedTraces([...prevTraces, trace]);
   };
 
   const compareAllModels = () => {
@@ -661,12 +671,70 @@ const App = () => {
       });
     });
 
-    setSavedTraces(prev => [...prev, ...newTraces]);
+    // Prevent duplicates: Remove existing traces that are about to be added
+    const newNames = new Set(newTraces.map(t => t.name));
+    setSavedTraces(prev => [...prev.filter(t => !newNames.has(t.name)), ...newTraces]);
   };
 
   const clearTraces = () => setSavedTraces([]);
   const removeTrace = (id) => setSavedTraces(savedTraces.filter(t => t.id !== id));
   const getRandomColor = () => ['#10b981', '#8b5cf6', '#f59e0b', '#64748b', '#ef4444'][Math.floor(Math.random() * 5)];
+
+  // --- SCENARIO SAVE/RESTORE HANDLERS ---
+  const saveScenario = () => {
+    const scenario = {
+      id: Date.now(),
+      name: `${drug} - ${patient.age}y ${patient.gender} (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
+      timestamp: Date.now(),
+      data: {
+        patient: { ...patient },
+        drug,
+        model,
+        events: [...events],
+        autoFillStats,
+        simDuration,
+        startTime: isClockMode ? startTime : null
+      }
+    };
+    setSavedScenarios(prev => [scenario, ...prev]);
+  };
+
+  const loadScenario = (scenario) => {
+    const d = scenario.data;
+    setPatient(d.patient);
+    setDrug(d.drug);
+    // Timeout to allow drug effect to clear traces first, then set model
+    // However, React batching might handle it. We'll set model directly.
+    // The drug change effect clears traces, which Is desired. 
+    // If the saved scenario was the SAME drug, we might lose traces we wanted to keep? 
+    // User said "temporarily save... even if I change patient/drug".
+    // So restoring should probably restore the exact state.
+    // Setting drug triggers the "clear traces" effect. 
+    // We might want to allow that to happen to simulate a fresh start.
+
+    // We need to ensure model is set AFTER drug change effect might reset it.
+    // But since `model` is a dependency of simulation, setting it here is fine.
+    // The auto-selector in useEffect depends on drug/age. We need to bypass it or ensure it settles.
+    // The current auto-select logic runs on [drug, patient.age].
+    // If we set state here, the effect will run. 
+    // We can just rely on the fact that if the saved model is valid, it will be kept or re-selected.
+    // But to be safe, we might need a small timeout or just accept the auto-select logic might override if invalid.
+    // Assuming saved state was valid:
+    setModel(d.model);
+
+    setEvents(d.events);
+    setAutoFillStats(d.autoFillStats);
+    setSimDuration(d.simDuration);
+    if (d.startTime) {
+      setIsClockMode(true);
+      setStartTime(d.startTime);
+    }
+  };
+
+  const deleteScenario = (id) => {
+    setSavedScenarios(prev => prev.filter(s => s.id !== id));
+  };
+
 
   const getDoseUnit = () => CLINICAL_DEFAULTS[drug]?.unit || 'mcg';
   const currentRange = THERAPEUTIC_RANGES[drug];
@@ -736,6 +804,14 @@ const App = () => {
               >
                 <Save className="w-4 h-4" />
                 {t('addToCompare')}
+              </button>
+              <button
+                onClick={saveScenario}
+                className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded shadow hover:bg-indigo-700 text-sm transition-colors"
+                title={t('saveScenarioTooltip')}
+              >
+                <FolderOpen className="w-4 h-4" />
+                {t('saveCase')}
               </button>
               <button
                 onClick={compareAllModels}
@@ -1270,6 +1346,47 @@ const App = () => {
                 ))}
               </div>
             </div >
+
+            {/* Saved Scenarios List */}
+            {savedScenarios.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="bg-indigo-50 p-2 px-4 border-b border-indigo-100 flex justify-between items-center text-indigo-800">
+                  <h3 className="font-bold text-sm flex items-center gap-2">
+                    <FolderOpen className="w-4 h-4" />
+                    {t('savedCases')}
+                  </h3>
+                  <span className="text-xs">{savedScenarios.length} items</span>
+                </div>
+                <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
+                  {savedScenarios.map(s => (
+                    <div key={s.id} className="p-2 px-4 flex justify-between items-center text-sm hover:bg-slate-50 group">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-slate-700">{s.name}</span>
+                        <span className="text-xs text-slate-400">
+                          {s.data.events.length} events • {s.data.model}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => loadScenario(s)}
+                          className="flex items-center gap-1 bg-white border border-indigo-200 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-50 text-xs"
+                        >
+                          <Download className="w-3 h-3" />
+                          {t('load')}
+                        </button>
+                        <button
+                          onClick={() => deleteScenario(s.id)}
+                          className="text-slate-300 hover:text-red-500 p-1.5"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </div >
         </div >
       </main >

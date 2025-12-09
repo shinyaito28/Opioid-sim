@@ -47,5 +47,9 @@
     "respRisk": "Resp Risk >",
     "clockMode": "Clock Mode",
     "now": "Now",
-    "indefinite": "Indefinite"
+    "indefinite": "Indefinite",
+    "saveCase": "Save Case",
+    "savedCases": "Saved Cases",
+    "load": "Load",
+    "saveScenarioTooltip": "Save current patient & drug state as a case"
 }
