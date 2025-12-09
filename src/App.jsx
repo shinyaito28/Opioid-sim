@@ -928,8 +928,14 @@ const App = () => {
               </div>
 
               <input
-                type="range" min="30" max={maxTimeScale} step="30"
-                value={simDuration} onChange={(e) => setSimDuration(Number(e.target.value))}
+                type="range" min={Math.sqrt(30)} max={Math.sqrt(maxTimeScale)} step="0.1"
+                value={Math.sqrt(simDuration)}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  const newDuration = Math.round(val ** 2);
+                  // Snap to nearest 10 to keep it clean
+                  setSimDuration(Math.round(newDuration / 10) * 10);
+                }}
                 className="w-20 md:w-32 accent-slate-600"
               />
 
