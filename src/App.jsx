@@ -42,15 +42,31 @@ const THERAPEUTIC_RANGES = {
     analgesiaMax: 100,
     respiratoryRisk: 200,
     label: 'Analgesia (50-100) / Resp Risk > 200'
+  },
+  'Sufentanil': {
+    analgesiaMin: 0.2,
+    analgesiaMax: 0.6,
+    respiratoryRisk: 0.5,
+    label: 'Analgesia (0.2-0.6)'
   }
 };
 
+const DRUG_UNITS = {
+  'Fentanyl': ['mcg/kg/hr', 'mcg/hr'],
+  'Remifentanil': ['mcg/kg/min', 'mcg/hr', 'mcg/min'],
+  'Morphine': ['mg/hr', 'mg/kg/hr', 'mcg/kg/min'],
+  'Hydromorphone': ['mg/hr', 'mg/kg/hr', 'mcg/kg/min'],
+  'Methadone': ['mg/hr'],
+  'Sufentanil': ['mcg/kg/hr', 'mcg/hr']
+};
+
 const CLINICAL_DEFAULTS = {
-  'Fentanyl': { bolus: 100, rate: 50, duration: 60, unit: 'mcg' },
-  'Remifentanil': { bolus: 0, rate: 1000, duration: 60, unit: 'mcg' },
+  'Fentanyl': { bolus: 100, rate: 1.0, duration: 60, unit: 'mcg' },
+  'Remifentanil': { bolus: 0, rate: 0.25, duration: 60, unit: 'mcg' },
   'Morphine': { bolus: 5, rate: 2, duration: 120, unit: 'mg' },
   'Hydromorphone': { bolus: 1, rate: 0.5, duration: 120, unit: 'mg' },
-  'Methadone': { bolus: 5, rate: 2, duration: 60, unit: 'mg' }
+  'Methadone': { bolus: 5, rate: 2, duration: 60, unit: 'mg' },
+  'Sufentanil': { bolus: 0.1, rate: 0.3, duration: 60, unit: 'mcg' }
 };
 
 // Define available models for easy iteration
@@ -59,7 +75,8 @@ const AVAILABLE_MODELS = {
   'Remifentanil': ['Minto (Adult)', 'Rigby-Jones (Pediatric)'],
   'Morphine': ['Maitre (Adult)', 'McFarlan (Pediatric)'],
   'Hydromorphone': ['Jeleazcov (2014) Adult', 'Balyan (2020) Pediatric', 'Standard (Adult)', 'Pediatric (Scaled)'],
-  'Methadone': ['Standard (Adult)']
+  'Methadone': ['Standard (Adult)'],
+  'Sufentanil': ['Gepts (1995) Adult', 'Bartkowska-Sniatkowska (2016) PICU']
 };
 
 /**
@@ -129,6 +146,7 @@ const getModelRequirements = (drug, model) => {
   if (drug === 'Hydromorphone' && model.includes('Jeleazcov')) return ['age', 'weight'];
   if (drug === 'Fentanyl' && model.includes('Shafer')) return [];
   if (drug === 'Methadone') return ['weight'];
+  if (drug === 'Sufentanil') return ['weight'];
   return ['weight'];
 };
 
@@ -140,6 +158,7 @@ const getBestModel = (drug, age) => {
   if (drug === 'Morphine') return isPeds ? 'McFarlan (Pediatric)' : 'Maitre (Adult)';
   if (drug === 'Hydromorphone') return isPeds ? 'Balyan (2020) Pediatric' : 'Jeleazcov (2014) Adult';
   if (drug === 'Methadone') return 'Standard (Adult)';
+  if (drug === 'Sufentanil') return isPeds ? 'Bartkowska-Sniatkowska (2016) PICU' : 'Gepts (1995) Adult';
   return 'Bae (2020) Adult';
 };
 
@@ -150,6 +169,7 @@ const estimateBolus = (drug, weight) => {
   else if (drug === 'Morphine') dose = weight * 0.1;
   else if (drug === 'Hydromorphone') dose = weight * 0.02;
   else if (drug === 'Methadone') dose = weight * 0.1;
+  else if (drug === 'Sufentanil') dose = weight * 0.1; // 0.1 mcg/kg
 
   if (dose === 0) return 0;
   return parseFloat(dose.toPrecision(1));
@@ -269,10 +289,64 @@ const getPKParameters = (drug, model, patient) => {
     params.Q3 = (136.0 / 60) * (wRatio ** 0.75);
     params.ke0 = 0.05; // Estimated, slow equilibration
   }
+  // --- SUFENTANIL ---
+  else if (drug === 'Sufentanil') {
+    if (model === 'Gepts (1995) Adult') {
+      // Gepts E et al. Anesthesiology 1995; 83:1194-1204
+      // V1 = 14.2 L, V2 = 40.0 L, V3 = 217 L
+      // Cl = 0.94 L/min, Q2 = 1.9 L/min, Q3 = 1.1 L/min
+      // Ke0 not defined in original PK paper, referencing TCI manual or similar: 0.17 approx
+      params.V1 = 14.2;
+      params.V2 = 40.0;
+      params.V3 = 217.0;
+      params.Cl = 0.94;
+      params.Q2 = 1.9;
+      params.Q3 = 1.1;
+      params.ke0 = 0.17; // Common TCI value (e.g. Schnider/Minto range equivalent)
+    } else if (model === 'Bartkowska-Sniatkowska (2016) PICU') {
+      // Bartkowska-Sniatkowska A et al. Cartlidge. Paediatr Anaesth. 2016
+      // PopPK in ICU children (sedation). 2-compartment.
+      // Cl = 19.5 * (W/70)^0.75 L/h  => /60 for L/min
+      // V1 (Vc) = 11.5 * (W/70) L
+      // Q (Q2) = 15.3 * (W/70)^0.75 L/h => /60
+      // V2 (Vp) = 40 * (W/70) L
+      // ke0 estimated similar to adult or peds data: 0.15
+      const wRatio = weight / 70;
+      params.V1 = 11.5 * wRatio;
+      params.V2 = 40.0 * wRatio;
+      params.V3 = 0; // 2-comp
+      params.Cl = (19.5 / 60) * (wRatio ** 0.75);
+      params.Q2 = (15.3 / 60) * (wRatio ** 0.75);
+      params.Q3 = 0;
+      params.ke0 = 0.15;
+    }
+  }
 
   if (isNaN(params.V1) || params.V1 <= 0.1) params.V1 = 1.0;
   return params;
 };
+
+// --- UNIT CONVERSION HELPERS ---
+const convertToStandardUnit = (rate, unit, weight, drug) => {
+  // Standard Unit: mcg/hr for Fent/Remi/Sufentanil, mg/hr for Morphine/Hydro/Methadone
+  const isMgDrug = ['Morphine', 'Hydromorphone', 'Methadone'].includes(drug);
+
+  let valInMcgHr = 0;
+
+  switch (unit) {
+    case 'mcg/hr': valInMcgHr = rate; break;
+    case 'mg/hr': valInMcgHr = rate * 1000; break;
+    case 'mcg/kg/min': valInMcgHr = rate * weight * 60; break;
+    case 'mcg/min': valInMcgHr = rate * 60; break;
+    case 'mcg/kg/hr': valInMcgHr = rate * weight; break;
+    case 'mg/kg/hr': valInMcgHr = rate * weight * 1000; break;
+    default: valInMcgHr = rate;
+  }
+
+  if (isMgDrug) return valInMcgHr / 1000; // Return mg/hr
+  return valInMcgHr; // Return mcg/hr
+};
+
 
 // Simulation Engine
 const simulateConcentration = (events, params, durationMinutes, drugType) => {
@@ -367,6 +441,7 @@ const App = () => {
   const [infusionStartTime, setInfusionStartTime] = useState(0);
   const [infusionDuration, setInfusionDuration] = useState(60);
   const [isInfiniteDuration, setIsInfiniteDuration] = useState(true);
+  const [infusionUnit, setInfusionUnit] = useState(DRUG_UNITS['Fentanyl'][0]);
 
   const [events, setEvents] = useState([
     { id: 1, type: 'bolus', time: 0, amount: CLINICAL_DEFAULTS['Fentanyl'].bolus }
@@ -491,6 +566,9 @@ const App = () => {
       setInfusionRate(Math.round(defs.rate * scale * 10) / 10);
       setInfusionDuration(defs.duration);
       setIsInfiniteDuration(true);
+
+      // Set default unit
+      setInfusionUnit(DRUG_UNITS[drug] ? DRUG_UNITS[drug][0] : 'mcg/hr');
     }
     setIsAutoY(true);
     setEvents([]);
@@ -593,11 +671,15 @@ const App = () => {
       newStartTime = 0; // The new event starts at 0
     }
 
+    const standardRate = convertToStandardUnit(parseFloat(infusionRate), infusionUnit, patient.weight, drug);
+
     setEvents([...currentEvents, {
       id: Date.now(),
       type: 'infusion',
       time: newStartTime,
-      rate: parseFloat(infusionRate),
+      rate: standardRate,
+      originalRate: parseFloat(infusionRate), // Save original input for editing
+      originalUnit: infusionUnit,
       duration: isInfiniteDuration ? (simDuration - newStartTime + 60) : parseFloat(infusionDuration)
     }]);
     setEditingId(null);
@@ -612,7 +694,17 @@ const App = () => {
       setBolusTime(evt.time);
       setEditingId('bolus');
     } else {
-      setInfusionRate(evt.rate);
+      // Try to use original values if available, otherwise just use the rate (which is standardized)
+      // If we don't have originalUnit, we might display standardized rate in default unit?
+      // Simple approach: if original exists, use it. If not, assumes standard unit.
+      if (evt.originalRate && evt.originalUnit && DRUG_UNITS[drug].includes(evt.originalUnit)) {
+        setInfusionRate(evt.originalRate);
+        setInfusionUnit(evt.originalUnit);
+      } else {
+        setInfusionRate(evt.rate);
+        // Keep current unit or default? Default might be confusing if converted.
+        // If no original info, it means it's an old event or generic.
+      }
       setInfusionStartTime(evt.time);
       setInfusionDuration(evt.duration);
       setIsInfiniteDuration(false);
@@ -1092,7 +1184,9 @@ const App = () => {
                     <option value="Remifentanil">Remifentanil (mcg)</option>
                     <option value="Morphine">Morphine (mg)</option>
                     <option value="Hydromorphone">Hydromorphone (mg)</option>
+                    <option value="Hydromorphone">Hydromorphone (mg)</option>
                     <option value="Methadone">Methadone (mg)</option>
+                    <option value="Sufentanil">Sufentanil (mcg)</option>
                   </select>
                 </div>
                 <div>
@@ -1120,6 +1214,10 @@ const App = () => {
                     </>}
                     {drug === 'Methadone' && <>
                       <option>Standard (Adult)</option>
+                    </>}
+                    {drug === 'Sufentanil' && <>
+                      <option>Gepts (1995) Adult</option>
+                      <option>Bartkowska-Sniatkowska (2016) PICU</option>
                     </>}
                   </select>
                 </div>
@@ -1268,7 +1366,17 @@ const App = () => {
                 </div>
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
-                    <label className="text-[10px] uppercase text-slate-400 font-bold">{t('rate')} ({getDoseUnit()}/hr)</label>
+                    <label className="text-[10px] uppercase text-slate-400 font-bold flex justify-between">
+                      <span>{t('rate')}</span>
+                      <select
+                        value={infusionUnit}
+                        onChange={e => setInfusionUnit(e.target.value)}
+                        className="text-[9px] border-none bg-transparent p-0 text-right pr-4 font-mono text-slate-500 cursor-pointer focus:ring-0 outline-none"
+                        style={{ textAlignLast: 'right' }}
+                      >
+                        {DRUG_UNITS[drug]?.map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </label>
                     <input type="number" min="0" value={infusionRate} onChange={e => setInfusionRate(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-lg font-bold text-center text-orange-700" />
                   </div>
                   <div className="w-16">
@@ -1333,7 +1441,8 @@ const App = () => {
                       {evt.type === 'bolus' ? <Syringe className="w-4 h-4 text-purple-500" /> : <Activity className="w-4 h-4 text-orange-500" />}
                       <span className="font-mono text-slate-500 w-12 text-right">{evt.time} min</span>
                       <span className="font-medium text-slate-700">
-                        {evt.type === 'bolus' ? `${t('bolusLabel')}: ${evt.amount} ${getDoseUnit()}` : `${t('infusionLabel')}: ${evt.rate} ${getDoseUnit()}/hr (${evt.duration}min)`}
+                        {evt.type === 'bolus' ? `${t('bolusLabel')}: ${evt.amount} ${getDoseUnit()}` :
+                          `${t('infusionLabel')}: ${evt.originalRate || evt.rate} ${evt.originalUnit || (getDoseUnit() + '/hr')} (${evt.duration}min)`}
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
