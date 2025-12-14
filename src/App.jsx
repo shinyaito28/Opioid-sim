@@ -177,19 +177,10 @@ const estimateBolus = (drug, weight) => {
 
   if (dose === 0) return 0;
 
-  // Refined Rounding for Clinical Realism
-  // For small numbers (e.g. 0.15 mg), we want 2 significant digits or 2 decimals
-  // For large numbers (e.g. 100 mcg), we want nice integers
-
-  if (dose < 1) {
-    // e.g. 0.152 -> 0.15
-    return parseFloat(dose.toPrecision(2));
-  }
+  // Refined Rounding: Strictly 1 significant digit for small numbers as requested
   if (dose < 10) {
-    // e.g. 1.23 -> 1.2, 5.55 -> 5.6
-    return parseFloat(dose.toPrecision(2));
+    return parseFloat(dose.toPrecision(1));
   }
-  // For larger numbers, integers are usually realistic enough for boluses
   return Math.round(dose);
 };
 
@@ -410,6 +401,22 @@ const convertToStandardUnit = (rate, unit, weight, drug) => {
 
   if (isMgDrug) return valInMcgHr / 1000; // Return mg/hr
   return valInMcgHr; // Return mcg/hr
+};
+
+const convertFromStandardUnit = (standardRate, targetUnit, weight, drug) => {
+  // standardRate is mg/hr (if mg drug) or mcg/hr (if mcg drug)
+  const isMgDrug = ['Morphine', 'Hydromorphone', 'Methadone'].includes(drug);
+  let valInMcgHr = isMgDrug ? standardRate * 1000 : standardRate;
+
+  switch (targetUnit) {
+    case 'mcg/hr': return valInMcgHr;
+    case 'mg/hr': return valInMcgHr / 1000;
+    case 'mcg/kg/min': return valInMcgHr / (weight * 60);
+    case 'mcg/min': return valInMcgHr / 60;
+    case 'mcg/kg/hr': return valInMcgHr / weight;
+    case 'mg/kg/hr': return valInMcgHr / (weight * 1000);
+    default: return standardRate; // Fallback
+  }
 };
 
 
@@ -660,7 +667,7 @@ const App = () => {
         if (drug === 'Fentanyl') newRate = patient.weight * 1.0; // if unit was mcg/hr
       }
 
-      setInfusionRate(parseFloat(newRate.toPrecision(2)));
+      setInfusionRate(parseFloat(newRate.toPrecision(1)));
       setInfusionDuration(defs.duration);
       setIsInfiniteDuration(true);
       setInfusionUnit(defaultUnit);
@@ -929,6 +936,23 @@ const App = () => {
     if (simDuration > newMax) {
       setSimDuration(newMax);
     }
+  };
+
+  const handleInfusionUnitChange = (newUnit) => {
+    // Convert current rate to new unit to maintain same absolute dose
+    const currentStd = convertToStandardUnit(parseFloat(infusionRate), infusionUnit, patient.weight, drug);
+    const newRateVal = convertFromStandardUnit(currentStd, newUnit, patient.weight, drug);
+
+    // For unit conversion, we want to be accurate but clean.
+    // If we use strict 1 sig digit here, jumping between units might cause large drifts.
+    // e.g. 10 -> 0.166 -> 0.2 -> 12. 
+    // User asked "number in box becomes same amount". This implies accuracy.
+    // But they ALSO asked "auto input dose 1 sig digit".
+    // I will use slightly more precision for conversion (2 sig digits) to keep stability, 
+    // unless the value is very round.
+    // Let's try 2 significant digits for stability.
+    setInfusionRate(parseFloat(newRateVal.toPrecision(2)));
+    setInfusionUnit(newUnit);
   };
 
   return (
@@ -1332,12 +1356,7 @@ const App = () => {
                   </div>
                 )}
                 {drug === 'Morphine' && (
-                  <div className="mt-2 flex flex-col gap-1 text-[10px] text-slate-500 bg-yellow-50 p-1.5 rounded">
-                    <span className="font-bold flex items-center gap-1"><FileText className="w-3 h-3" /> References:</span>
-                    <span>Adult: Mazoit (2007) Anesth Analg</span>
-                    <span>Peds: Bouwmeester (2004) BJA</span>
-                    <span>Neo: Anand (2008) BJA (NEOPAIN)</span>
-                  </div>
+                  null
                 )}
               </div>
             </div>
@@ -1467,7 +1486,7 @@ const App = () => {
                       <span>{t('rate')}</span>
                       <select
                         value={infusionUnit}
-                        onChange={e => setInfusionUnit(e.target.value)}
+                        onChange={e => handleInfusionUnitChange(e.target.value)}
                         className="text-[9px] border-none bg-transparent p-0 text-right pr-4 font-mono text-slate-500 cursor-pointer focus:ring-0 outline-none"
                         style={{ textAlignLast: 'right' }}
                       >
