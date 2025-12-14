@@ -176,9 +176,20 @@ const estimateBolus = (drug, weight) => {
   else if (drug === 'Sufentanil') dose = weight * 0.15; // 0.15 mcg/kg
 
   if (dose === 0) return 0;
-  // Rounding
-  if (dose < 1) return parseFloat(dose.toPrecision(1));
-  if (dose < 10) return parseFloat(dose.toFixed(1));
+
+  // Refined Rounding for Clinical Realism
+  // For small numbers (e.g. 0.15 mg), we want 2 significant digits or 2 decimals
+  // For large numbers (e.g. 100 mcg), we want nice integers
+
+  if (dose < 1) {
+    // e.g. 0.152 -> 0.15
+    return parseFloat(dose.toPrecision(2));
+  }
+  if (dose < 10) {
+    // e.g. 1.23 -> 1.2, 5.55 -> 5.6
+    return parseFloat(dose.toPrecision(2));
+  }
+  // For larger numbers, integers are usually realistic enough for boluses
   return Math.round(dose);
 };
 
