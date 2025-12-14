@@ -420,8 +420,8 @@ const simulateConcentration = (events, params, durationMinutes, drugType) => {
   if (!V1 || V1 <= 0) return [];
 
   const k10 = Cl / V1;
-  const k12 = Q2 / V1;
-  const k21 = Q2 / V2;
+  const k12 = (V2 > 0) ? Q2 / V1 : 0;
+  const k21 = (V2 > 0) ? Q2 / V2 : 0;
 
   const k13 = (V3 > 0) ? Q3 / V1 : 0;
   const k31 = (V3 > 0) ? Q3 / V3 : 0;
@@ -493,7 +493,7 @@ const simulateConcentration = (events, params, durationMinutes, drugType) => {
 const App = () => {
   const { t, i18n } = useTranslation();
   const [patient, setPatient] = useState({
-    age: 40, weight: 60, height: 165, gender: 'male'
+    age: 10, weight: 30, height: 138, gender: 'male'
   });
   const [autoFillStats, setAutoFillStats] = useState(true);
 
@@ -1278,7 +1278,6 @@ const App = () => {
                     <option value="Fentanyl">Fentanyl (mcg)</option>
                     <option value="Remifentanil">Remifentanil (mcg)</option>
                     <option value="Morphine">Morphine (mg)</option>
-                    <option value="Hydromorphone">Hydromorphone (mg)</option>
                     <option value="Hydromorphone">Hydromorphone (mg)</option>
                     <option value="Methadone">Methadone (mg)</option>
                     <option value="Sufentanil">Sufentanil (mcg)</option>
