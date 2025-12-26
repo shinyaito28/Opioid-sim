@@ -1490,19 +1490,28 @@ const App = () => {
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
                     <label className="text-[10px] uppercase text-slate-400 font-bold">{t('dose')} ({getDoseUnit()})</label>
-                    <input type="number" min="0" value={bolusAmount} onChange={e => setBolusAmount(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-lg font-bold text-center text-purple-700" />
+                    <input type="number" min="0" value={bolusAmount} onChange={e => setBolusAmount(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 h-10 text-lg font-bold text-center text-purple-700" />
                   </div>
                   <div className="w-20">
-                    <label className="text-[10px] uppercase text-slate-400 font-bold">{t('time')}</label>
+                    <label className="text-[10px] uppercase text-slate-400 font-bold flex justify-between items-center mb-0.5">
+                      <span>{t('time')}</span>
+                      <button
+                        onClick={() => setBolusTime(isClockMode && currentSimMinutes !== null ? currentSimMinutes : 0)}
+                        className="text-[9px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-1.5 rounded border border-slate-200 flex items-center gap-0.5 ml-1 transition-colors"
+                        title={t('now')}
+                      >
+                        {t('now')}
+                      </button>
+                    </label>
                     {isClockMode ? (
                       <input
                         type="time"
                         value={minutesToTime(bolusTime, startTime)}
                         onChange={e => setBolusTime(timeToMinutes(e.target.value, startTime))}
-                        className="w-full border rounded p-2 text-center text-sm"
+                        className="w-full border rounded px-1 h-10 text-center text-sm"
                       />
                     ) : (
-                      <input type="number" min="0" value={bolusTime} onChange={e => setBolusTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-center" />
+                      <input type="number" min="0" value={bolusTime} onChange={e => setBolusTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded px-1 h-10 text-center" />
                     )}
                   </div>
                   <button onClick={addBolus} className="bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-lg shadow active:scale-95 transition-transform">
@@ -1531,19 +1540,28 @@ const App = () => {
                         {DRUG_UNITS[drug]?.map(u => <option key={u} value={u}>{u}</option>)}
                       </select>
                     </label>
-                    <input type="number" min="0" value={infusionRate} onChange={e => setInfusionRate(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-lg font-bold text-center text-orange-700" />
+                    <input type="number" min="0" value={infusionRate} onChange={e => setInfusionRate(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 h-10 text-lg font-bold text-center text-orange-700" />
                   </div>
                   <div className="w-16">
-                    <label className="text-[10px] uppercase text-slate-400 font-bold">{t('start')}</label>
+                    <label className="text-[10px] uppercase text-slate-400 font-bold flex justify-between items-center mb-0.5">
+                      <span>{t('start')}</span>
+                      <button
+                        onClick={() => setInfusionStartTime(isClockMode && currentSimMinutes !== null ? currentSimMinutes : 0)}
+                        className="text-[9px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-1.5 rounded border border-slate-200 flex items-center gap-0.5 -mr-1 transition-colors"
+                        title={t('now')}
+                      >
+                        {t('now')}
+                      </button>
+                    </label>
                     {isClockMode ? (
                       <input
                         type="time"
                         value={minutesToTime(infusionStartTime, startTime)}
                         onChange={e => setInfusionStartTime(timeToMinutes(e.target.value, startTime))}
-                        className="w-full border rounded p-2 text-center text-sm"
+                        className="w-full border rounded px-1 h-10 text-center text-sm"
                       />
                     ) : (
-                      <input type="number" min="0" value={infusionStartTime} onChange={e => setInfusionStartTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-center" />
+                      <input type="number" min="0" value={infusionStartTime} onChange={e => setInfusionStartTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded px-1 h-10 text-center" />
                     )}
                   </div>
                   <div className="w-24">
@@ -1555,7 +1573,7 @@ const App = () => {
                       </label>
                     </label>
                     {isInfiniteDuration ? (
-                      <div className="w-full border rounded p-2 text-center text-slate-400 bg-slate-50 text-xl flex items-center justify-center h-[38px]">∞</div>
+                      <div className="w-full border rounded px-1 text-center text-slate-400 bg-slate-50 text-xl flex items-center justify-center h-10">∞</div>
                     ) : (
                       isClockMode ? (
                         <input
@@ -1567,10 +1585,10 @@ const App = () => {
                             if (dur < 0) dur += 1440;
                             setInfusionDuration(dur);
                           }}
-                          className="w-full border rounded p-2 text-center text-sm"
+                          className="w-full border rounded px-1 h-10 text-center text-sm"
                         />
                       ) : (
-                        <input type="number" min="0" value={infusionDuration} onChange={e => setInfusionDuration(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-center" />
+                        <input type="number" min="0" value={infusionDuration} onChange={e => setInfusionDuration(Math.max(0, Number(e.target.value)))} className="w-full border rounded px-1 h-10 text-center" />
                       )
                     )}
                   </div>
