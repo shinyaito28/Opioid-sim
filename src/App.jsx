@@ -519,9 +519,7 @@ const App = () => {
   const [isInfiniteDuration, setIsInfiniteDuration] = useState(true);
   const [infusionUnit, setInfusionUnit] = useState(DRUG_UNITS['Fentanyl'][0]);
 
-  const [events, setEvents] = useState([
-    { id: 1, type: 'bolus', time: 0, amount: CLINICAL_DEFAULTS['Fentanyl'].bolus }
-  ]);
+  const [events, setEvents] = useState([]);
 
   const [simDuration, setSimDuration] = useState(120);
   const [maxTimeScale, setMaxTimeScale] = useState(720);
@@ -1494,7 +1492,7 @@ const App = () => {
                     <label className="text-[10px] uppercase text-slate-400 font-bold">{t('dose')} ({getDoseUnit()})</label>
                     <input type="number" min="0" value={bolusAmount} onChange={e => setBolusAmount(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-lg font-bold text-center text-purple-700" />
                   </div>
-                  <div className="w-20 relative">
+                  <div className="w-20">
                     <label className="text-[10px] uppercase text-slate-400 font-bold">{t('time')}</label>
                     {isClockMode ? (
                       <input
@@ -1506,14 +1504,6 @@ const App = () => {
                     ) : (
                       <input type="number" min="0" value={bolusTime} onChange={e => setBolusTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-center" />
                     )}
-                    <button
-                      onClick={() => setBolusTime(isClockMode && currentSimMinutes !== null ? currentSimMinutes : 0)}
-                      className="absolute -top-7 right-0 text-[10px] bg-slate-200 hover:bg-slate-300 text-slate-600 px-1.5 py-0.5 rounded flex items-center gap-1"
-                      title={t('now')}
-                    >
-                      <MousePointerClick className="w-3 h-3" />
-                      {t('now')}
-                    </button>
                   </div>
                   <button onClick={addBolus} className="bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-lg shadow active:scale-95 transition-transform">
                     {editingId === 'bolus' ? <Save className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
@@ -1543,7 +1533,7 @@ const App = () => {
                     </label>
                     <input type="number" min="0" value={infusionRate} onChange={e => setInfusionRate(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-lg font-bold text-center text-orange-700" />
                   </div>
-                  <div className="w-16 relative">
+                  <div className="w-16">
                     <label className="text-[10px] uppercase text-slate-400 font-bold">{t('start')}</label>
                     {isClockMode ? (
                       <input
@@ -1555,14 +1545,6 @@ const App = () => {
                     ) : (
                       <input type="number" min="0" value={infusionStartTime} onChange={e => setInfusionStartTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-center" />
                     )}
-                    <button
-                      onClick={() => setInfusionStartTime(isClockMode && currentSimMinutes !== null ? currentSimMinutes : 0)}
-                      className="absolute -top-7 right-0 text-[10px] bg-slate-200 hover:bg-slate-300 text-slate-600 px-1.5 py-0.5 rounded flex items-center gap-1"
-                      title={t('now')}
-                    >
-                      <MousePointerClick className="w-3 h-3" />
-                      {t('now')}
-                    </button>
                   </div>
                   <div className="w-24">
                     <label className="text-[10px] uppercase text-slate-400 font-bold flex flex-col">
