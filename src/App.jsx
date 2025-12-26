@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
-import { Syringe, Clock, Settings, User, Activity, Plus, Trash2, Save, X, Eye, EyeOff, ZoomIn, Baby, Edit2, AlertCircle, Wand2, Info, FileText, Layers, FolderOpen, Download } from 'lucide-react';
+import { Syringe, Clock, Settings, User, Activity, Plus, Trash2, Save, X, Eye, EyeOff, ZoomIn, Baby, Edit2, AlertCircle, Wand2, Info, FileText, Layers, FolderOpen, Download, MousePointerClick } from 'lucide-react';
 
 
 /**
@@ -538,11 +538,48 @@ const App = () => {
   const [startTime, setStartTime] = useState("09:00");
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // --- EFFECT: Update Current Time ---
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000); // Update every minute
     return () => clearInterval(timer);
   }, []);
+
+  // --- PERSISTENCE: LOAD ---
+  useEffect(() => {
+    const savedData = localStorage.getItem('opioid_sim_data');
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        if (parsed.patient) setPatient(parsed.patient);
+        if (parsed.drug) setDrug(parsed.drug); // Note: setDrug here won't trigger the cleared events because we removed that useEffect
+        if (parsed.model) setModel(parsed.model);
+        if (parsed.events) setEvents(parsed.events);
+        if (parsed.simDuration) setSimDuration(parsed.simDuration);
+        if (parsed.savedTraces) setSavedTraces(parsed.savedTraces);
+        if (parsed.savedScenarios) setSavedScenarios(parsed.savedScenarios);
+        if (parsed.isClockMode !== undefined) setIsClockMode(parsed.isClockMode);
+        if (parsed.simSettings?.startTime) setStartTime(parsed.simSettings.startTime);
+      } catch (e) {
+        console.error("Failed to load saved state", e);
+      }
+    }
+  }, []);
+
+  // --- PERSISTENCE: SAVE ---
+  useEffect(() => {
+    const dataToSave = {
+      patient,
+      drug,
+      model,
+      events,
+      simDuration,
+      savedTraces,
+      savedScenarios,
+      isClockMode,
+      simSettings: { startTime }
+    };
+    localStorage.setItem('opioid_sim_data', JSON.stringify(dataToSave));
+  }, [patient, drug, model, events, simDuration, savedTraces, savedScenarios, isClockMode, startTime]);
+
   const [editingId, setEditingId] = useState(null);
 
   const activeParams = useMemo(() => getModelRequirements(drug, model), [drug, model]);
@@ -586,13 +623,17 @@ const App = () => {
   // --- EFFECT: Sync Dose Time with Real Time in Clock Mode ---
   useEffect(() => {
     if (isClockMode && currentSimMinutes !== null) {
+      // NOTE: User requested "One tap" setting, so auto-sync might be annoying if they want to enter past data.
+      // But the original code was auto-syncing. I will keep it BUT only if editing NEW event?
+      // Actually, let's keep the hook but rely on the new "NOW" button for manual control which is more explicit.
+      // The original hook below updates bolusTime automatically.
+      // If I keep this, the "Now" button is redundant for the initial moment, but useful if they changed it and want to go back.
+      // However, typical behavior is: set time -> it stays. 
+      // This hook makes it "follow" the clock. 
+      // I'll leave it as is to avoid regression, but the "Now" button is helpful for manual override or reset.
       const shouldUpdate = (prev) => {
-        // Update if value is 0 (initial) or matches previous minute (tracking)
-        // Allow small jitter (1-2 min) to handle update timing
         if (prev === 0) return true;
         const diff = Math.abs(prev - currentSimMinutes);
-        // If difference is 0 or 1, we are tracking. 
-        // We also check against (current - 1) for the transition moment.
         return diff <= 1 || Math.abs(prev - (currentSimMinutes - 1)) <= 1;
       };
 
@@ -632,55 +673,8 @@ const App = () => {
     }
   }, [drug, patient.weight, autoFillStats]);
 
-  // --- EFFECT: Set Defaults on Drug Change ---
-  useEffect(() => {
-    const isPeds = patient.age < 12;
-    const defs = CLINICAL_DEFAULTS[drug];
-    if (defs) {
-      // Scale Bolus if it's fixed? Actually estimateBolus handles dynamic weight-based
-      // But standard CLINICAL_DEFAULTS here might be used as base rates
+  // MOVED DRUG DEFAULT LOGIC TO handleDrugChange TO ENABLE PERSISTENCE
 
-      const estimatedBolus = estimateBolus(drug, patient.weight);
-      setBolusAmount(estimatedBolus);
-
-      // RATE: If the default unit is weight-based (contains /kg/), use the value directly.
-      // If it is absolute (e.g. mg/hr), we might want to scale it or use fixed.
-      // Current CLINICAL_DEFAULTS values I just updated are effectively "per kg" or "typical adult fixed".
-      // Let's refine:
-
-      const defaultUnit = DRUG_UNITS[drug] ? DRUG_UNITS[drug][0] : 'mcg/hr';
-      let newRate = defs.rate;
-
-      // If default is per kg, we use the factor directly as the rate (e.g. 0.25 mcg/kg/min)
-      // If default is NOT per kg (e.g. mg/hr), and the clinically default value is small (like 2.0), it's probably fixed.
-      // BUT if we want "realistic" for peds, we should probably scale mg/hr too?
-      // For now, Morphine/Hydro default units are mg/hr. I set defaults to 2.0 and 0.4.
-      // If patient is 10kg, 2mg/hr is too high. 
-      // So if unit is NOT kg-based, but we are in peds, we should scale.
-
-      const isWeightBasedUnit = defaultUnit.includes('/kg');
-
-      if (!isWeightBasedUnit && isPeds) {
-        // Naive scaling for mg/hr drugs in peds using the adult default as 70kg ref?
-        // Or just use 0.
-        // Let's use a safer calculation: weight * rate_per_kg
-        // Morphine 2mg/hr ~ 0.03 mg/kg/hr.
-        if (drug === 'Morphine') newRate = patient.weight * 0.03;
-        if (drug === 'Hydromorphone') newRate = patient.weight * 0.005;
-        if (drug === 'Methadone') newRate = 0;
-        if (drug === 'Fentanyl') newRate = patient.weight * 1.0; // if unit was mcg/hr
-      }
-
-      setInfusionRate(parseFloat(newRate.toPrecision(1)));
-      setInfusionDuration(defs.duration);
-      setIsInfiniteDuration(true);
-      setInfusionUnit(defaultUnit);
-    }
-    setIsAutoY(true);
-    setEvents([]);
-    setEditingId(null);
-    setSavedTraces(prev => prev.filter(t => t.drug === drug));
-  }, [drug]);
 
   // --- EFFECT: Run Simulation ---
   useEffect(() => {
@@ -693,9 +687,16 @@ const App = () => {
         processedEvents.push(evt);
       } else if (evt.type === 'infusion') {
         processedEvents.push({ ...evt, type: 'infusion_start' });
+
+        // Calculate effective duration (extend if infinite)
+        let effectiveDuration = evt.duration;
+        if (evt.isInfinite) {
+          effectiveDuration = Math.max(0, simDuration - evt.time + 60);
+        }
+
         processedEvents.push({
           type: 'infusion_stop',
-          time: evt.time + evt.duration,
+          time: evt.time + effectiveDuration,
           rate: 0
         });
       }
@@ -786,9 +787,44 @@ const App = () => {
       rate: standardRate,
       originalRate: parseFloat(infusionRate), // Save original input for editing
       originalUnit: infusionUnit,
-      duration: isInfiniteDuration ? (simDuration - newStartTime + 60) : parseFloat(infusionDuration)
+      duration: isInfiniteDuration ? (simDuration - newStartTime + 60) : parseFloat(infusionDuration),
+      isInfinite: isInfiniteDuration
     }]);
     setEditingId(null);
+  };
+
+  const handleDrugChange = (e) => {
+    const newDrug = e.target.value;
+    setDrug(newDrug);
+
+    const isPeds = patient.age < 12;
+    const defs = CLINICAL_DEFAULTS[newDrug];
+
+    if (defs) {
+      const estimatedBolus = estimateBolus(newDrug, patient.weight);
+      setBolusAmount(estimatedBolus);
+
+      const defaultUnit = DRUG_UNITS[newDrug] ? DRUG_UNITS[newDrug][0] : 'mcg/hr';
+      let newRate = defs.rate;
+
+      const isWeightBasedUnit = defaultUnit.includes('/kg');
+
+      if (!isWeightBasedUnit && isPeds) {
+        if (newDrug === 'Morphine') newRate = patient.weight * 0.03;
+        if (newDrug === 'Hydromorphone') newRate = patient.weight * 0.005;
+        if (newDrug === 'Methadone') newRate = 0;
+        if (newDrug === 'Fentanyl') newRate = patient.weight * 1.0;
+      }
+
+      setInfusionRate(parseFloat(newRate.toPrecision(1)));
+      setInfusionDuration(defs.duration);
+      setIsInfiniteDuration(true);
+      setInfusionUnit(defaultUnit);
+    }
+    setIsAutoY(true);
+    setEvents([]);
+    setEditingId(null);
+    setSavedTraces(prev => prev.filter(t => t.drug === newDrug));
   };
 
   const editEvent = (evt) => {
@@ -813,7 +849,7 @@ const App = () => {
       }
       setInfusionStartTime(evt.time);
       setInfusionDuration(evt.duration);
-      setIsInfiniteDuration(false);
+      setIsInfiniteDuration(!!evt.isInfinite);
       setEditingId('infusion');
     }
   };
@@ -1302,7 +1338,7 @@ const App = () => {
               <div className="space-y-3 text-sm">
                 <div>
                   <label className="text-slate-500 text-xs block mb-1">{t('drug')}</label>
-                  <select value={drug} onChange={e => setDrug(e.target.value)} className="w-full border rounded p-2 font-medium bg-emerald-50 text-emerald-900 border-emerald-200">
+                  <select value={drug} onChange={handleDrugChange} className="w-full border rounded p-2 font-medium bg-emerald-50 text-emerald-900 border-emerald-200">
                     <option value="Fentanyl">Fentanyl (mcg)</option>
                     <option value="Remifentanil">Remifentanil (mcg)</option>
                     <option value="Morphine">Morphine (mg)</option>
@@ -1458,7 +1494,7 @@ const App = () => {
                     <label className="text-[10px] uppercase text-slate-400 font-bold">{t('dose')} ({getDoseUnit()})</label>
                     <input type="number" min="0" value={bolusAmount} onChange={e => setBolusAmount(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-lg font-bold text-center text-purple-700" />
                   </div>
-                  <div className="w-20">
+                  <div className="w-20 relative">
                     <label className="text-[10px] uppercase text-slate-400 font-bold">{t('time')}</label>
                     {isClockMode ? (
                       <input
@@ -1470,6 +1506,14 @@ const App = () => {
                     ) : (
                       <input type="number" min="0" value={bolusTime} onChange={e => setBolusTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-center" />
                     )}
+                    <button
+                      onClick={() => setBolusTime(isClockMode && currentSimMinutes !== null ? currentSimMinutes : 0)}
+                      className="absolute -top-7 right-0 text-[10px] bg-slate-200 hover:bg-slate-300 text-slate-600 px-1.5 py-0.5 rounded flex items-center gap-1"
+                      title={t('now')}
+                    >
+                      <MousePointerClick className="w-3 h-3" />
+                      {t('now')}
+                    </button>
                   </div>
                   <button onClick={addBolus} className="bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-lg shadow active:scale-95 transition-transform">
                     {editingId === 'bolus' ? <Save className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
@@ -1499,7 +1543,7 @@ const App = () => {
                     </label>
                     <input type="number" min="0" value={infusionRate} onChange={e => setInfusionRate(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-lg font-bold text-center text-orange-700" />
                   </div>
-                  <div className="w-16">
+                  <div className="w-16 relative">
                     <label className="text-[10px] uppercase text-slate-400 font-bold">{t('start')}</label>
                     {isClockMode ? (
                       <input
@@ -1511,6 +1555,14 @@ const App = () => {
                     ) : (
                       <input type="number" min="0" value={infusionStartTime} onChange={e => setInfusionStartTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 text-center" />
                     )}
+                    <button
+                      onClick={() => setInfusionStartTime(isClockMode && currentSimMinutes !== null ? currentSimMinutes : 0)}
+                      className="absolute -top-7 right-0 text-[10px] bg-slate-200 hover:bg-slate-300 text-slate-600 px-1.5 py-0.5 rounded flex items-center gap-1"
+                      title={t('now')}
+                    >
+                      <MousePointerClick className="w-3 h-3" />
+                      {t('now')}
+                    </button>
                   </div>
                   <div className="w-24">
                     <label className="text-[10px] uppercase text-slate-400 font-bold flex flex-col">
