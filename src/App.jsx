@@ -1125,10 +1125,21 @@ const App = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-20">
+    <div
+      className="min-h-screen bg-slate-50 text-slate-800 font-sans"
+      style={{ paddingBottom: 'max(5rem, env(safe-area-inset-bottom))' }}
+    >
 
       {/* Header */}
-      <header className="bg-slate-800 text-white p-3 shadow-md sticky top-0 z-20">
+      <header
+        className="bg-slate-800 text-white shadow-md sticky top-0 z-20"
+        style={{
+          paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+          paddingBottom: '0.75rem',
+          paddingLeft: 'max(0.75rem, env(safe-area-inset-left))',
+          paddingRight: 'max(0.75rem, env(safe-area-inset-right))',
+        }}
+      >
         <div className="max-w-5xl mx-auto flex flex-wrap justify-between items-center gap-2">
           <div className="flex items-center gap-2">
             <Activity className="h-5 w-5 text-blue-400" />
@@ -1163,7 +1174,13 @@ const App = () => {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto p-3 space-y-4">
+      <main
+        className="max-w-5xl mx-auto space-y-4 py-3"
+        style={{
+          paddingLeft: 'max(0.75rem, env(safe-area-inset-left))',
+          paddingRight: 'max(0.75rem, env(safe-area-inset-right))',
+        }}
+      >
 
         {/* --- MAIN CHART SECTION --- */}
         <div className="bg-white p-2 md:p-4 rounded-xl shadow border border-slate-200">
