@@ -618,6 +618,60 @@ const App = () => {
     return point || null;
   }, [currentSimMinutes, simData]);
 
+  // --- SUMMARY METRICS ---
+  const summaryMetrics = useMemo(() => {
+    if (!simData || simData.length === 0) return null;
+    const range = THERAPEUTIC_RANGES[drug];
+    if (!range) return null;
+
+    let peakCe = { value: 0, time: 0 };
+    let peakCp = { value: 0, time: 0 };
+    let onsetTime = null;
+    let respRiskCount = 0;
+    let aboveUpperCount = 0;
+
+    simData.forEach(d => {
+      if (d.ce > peakCe.value) peakCe = { value: d.ce, time: d.time };
+      if (d.cp > peakCp.value) peakCp = { value: d.cp, time: d.time };
+      if (onsetTime === null && d.ce >= range.analgesiaMin) onsetTime = d.time;
+      if (d.ce >= range.respiratoryRisk) respRiskCount++;
+      if (d.ce >= range.analgesiaMax) aboveUpperCount++;
+    });
+
+    // Total dose: sum bolus + integrate infusion
+    let totalDose = 0;
+    events.forEach(evt => {
+      if (evt.type === 'bolus') {
+        totalDose += evt.amount;
+      } else if (evt.type === 'infusion') {
+        let effDuration = evt.duration;
+        if (evt.isInfinite) effDuration = Math.max(0, simDuration - evt.time);
+        // standardRate is in mcg/hr (or mg/hr if mg drug). Bolus amount is in displayed unit (matching).
+        totalDose += evt.rate * (effDuration / 60);
+      }
+    });
+
+    // Recovery: after the last terminating infusion stops, when ce drops below analgesiaMin
+    let recoveryTime = null;
+    const finiteInfusions = events.filter(e => e.type === 'infusion' && !e.isInfinite);
+    if (finiteInfusions.length > 0) {
+      const lastStop = Math.max(...finiteInfusions.map(e => e.time + e.duration));
+      const recPoint = simData.find(d => d.time >= lastStop && d.ce < range.analgesiaMin);
+      if (recPoint) recoveryTime = recPoint.time - lastStop;
+    }
+
+    return {
+      peakCe,
+      peakCp,
+      onsetTime,
+      respRiskMin: respRiskCount,
+      aboveUpperMin: aboveUpperCount,
+      totalDose,
+      recoveryTime,
+      drugUnit: CLINICAL_DEFAULTS[drug]?.unit || 'mcg',
+    };
+  }, [simData, events, drug, simDuration]);
+
   // --- EFFECT: Sync Dose Time with Real Time in Clock Mode ---
   useEffect(() => {
     if (isClockMode && currentSimMinutes !== null) {
@@ -793,6 +847,15 @@ const App = () => {
 
   const handleDrugChange = (e) => {
     const newDrug = e.target.value;
+    if (newDrug === drug) return;
+
+    if (events.length > 0) {
+      if (!window.confirm(t('confirmDrugSwitch'))) {
+        e.target.value = drug;
+        return;
+      }
+    }
+
     setDrug(newDrug);
 
     const isPeds = patient.age < 12;
@@ -976,6 +1039,74 @@ const App = () => {
     }
   };
 
+  const QUICK_PRESETS = [
+    {
+      id: 'adult-induction-fent',
+      labelKey: 'presetAdultInduction',
+      drug: 'Fentanyl',
+      bolus: { perKg: 2 },
+    },
+    {
+      id: 'peds-induction-fent',
+      labelKey: 'presetPedsInduction',
+      drug: 'Fentanyl',
+      bolus: { perKg: 1 },
+    },
+    {
+      id: 'tiva-remi',
+      labelKey: 'presetTivaMaintenance',
+      drug: 'Remifentanil',
+      bolus: { perKg: 1 },
+      infusion: { rate: 0.25, unit: 'mcg/kg/min', isInfinite: true },
+    },
+    {
+      id: 'icu-fent',
+      labelKey: 'presetIcuSedation',
+      drug: 'Fentanyl',
+      infusion: { rate: 1, unit: 'mcg/kg/hr', isInfinite: true },
+    },
+    {
+      id: 'pca-morphine',
+      labelKey: 'presetPcaMorphine',
+      drug: 'Morphine',
+      bolus: { perKg: 0.05 },
+      infusion: { rate: 0.01, unit: 'mg/kg/hr', isInfinite: true },
+    },
+  ];
+
+  const applyPreset = (preset) => {
+    if (events.length > 0) {
+      if (!window.confirm(t('confirmReset'))) return;
+    }
+
+    if (preset.drug !== drug) {
+      setDrug(preset.drug);
+    }
+
+    const newEvents = [];
+    let nextId = Date.now();
+    if (preset.bolus) {
+      const amount = parseFloat((preset.bolus.perKg * patient.weight).toPrecision(2));
+      newEvents.push({ id: nextId++, type: 'bolus', time: 0, amount });
+    }
+    if (preset.infusion) {
+      const stdRate = convertToStandardUnit(preset.infusion.rate, preset.infusion.unit, patient.weight, preset.drug);
+      newEvents.push({
+        id: nextId++,
+        type: 'infusion',
+        time: 0,
+        rate: stdRate,
+        originalRate: preset.infusion.rate,
+        originalUnit: preset.infusion.unit,
+        duration: preset.infusion.duration ?? Math.max(0, simDuration + 60),
+        isInfinite: preset.infusion.isInfinite || false,
+      });
+    }
+    setEvents(newEvents);
+    setEditingId(null);
+    setIsAutoY(true);
+  };
+
   const handleInfusionUnitChange = (newUnit) => {
     // Convert current rate to new unit to maintain same absolute dose
     const currentStd = convertToStandardUnit(parseFloat(infusionRate), infusionUnit, patient.weight, drug);
@@ -1143,6 +1274,37 @@ const App = () => {
                     />
                   </>
                 )}
+
+                {/* DOSING EVENT MARKERS */}
+                {events.map((evt) => {
+                  if (evt.type === 'bolus') {
+                    return (
+                      <ReferenceLine
+                        key={`evt-bolus-${evt.id}`}
+                        x={evt.time}
+                        stroke="#a855f7"
+                        strokeWidth={1.5}
+                        strokeDasharray="2 3"
+                        ifOverflow="extendDomain"
+                        label={{ value: '▼', position: 'top', fill: '#a855f7', fontSize: 12, fontWeight: 'bold' }}
+                      />
+                    );
+                  }
+                  if (evt.type === 'infusion') {
+                    const endTime = evt.isInfinite ? simDuration : evt.time + evt.duration;
+                    return (
+                      <ReferenceArea
+                        key={`evt-inf-${evt.id}`}
+                        x1={evt.time}
+                        x2={endTime}
+                        fill="#fb923c"
+                        fillOpacity={0.07}
+                        ifOverflow="hidden"
+                      />
+                    );
+                  }
+                  return null;
+                })}
 
                 {/* SAVED TRACES */}
                 {savedTraces.map((trace) => (
@@ -1322,6 +1484,80 @@ const App = () => {
             )
           }
         </div >
+
+        {/* --- SUMMARY METRICS --- */}
+        {summaryMetrics && simData.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="bg-white border border-pink-200 rounded-lg p-2.5 shadow-sm">
+              <div className="text-[10px] uppercase font-bold text-pink-600 tracking-wide">{t('summaryPeakCe')}</div>
+              <div className="text-xl font-bold text-pink-700 font-mono leading-tight">
+                {summaryMetrics.peakCe.value.toFixed(2)}
+              </div>
+              <div className="text-[10px] text-slate-500">
+                ng/mL {t('summaryAt')} {summaryMetrics.peakCe.time}{t('summaryMin')}
+              </div>
+            </div>
+
+            <div className="bg-white border border-emerald-200 rounded-lg p-2.5 shadow-sm">
+              <div className="text-[10px] uppercase font-bold text-emerald-600 tracking-wide">{t('summaryOnset')}</div>
+              <div className="text-xl font-bold text-emerald-700 font-mono leading-tight">
+                {summaryMetrics.onsetTime !== null ? `${summaryMetrics.onsetTime}` : '—'}
+              </div>
+              <div className="text-[10px] text-slate-500">
+                {summaryMetrics.onsetTime !== null ? `${t('summaryMin')} (Ce ≥ ${THERAPEUTIC_RANGES[drug].analgesiaMin})` : t('summaryNotReached')}
+              </div>
+            </div>
+
+            <div className="bg-white border border-red-200 rounded-lg p-2.5 shadow-sm">
+              <div className="text-[10px] uppercase font-bold text-red-600 tracking-wide">{t('summaryRespRisk')}</div>
+              <div className="text-xl font-bold text-red-700 font-mono leading-tight">
+                {summaryMetrics.respRiskMin}
+              </div>
+              <div className="text-[10px] text-slate-500">
+                {t('summaryMin')} (Ce ≥ {THERAPEUTIC_RANGES[drug].respiratoryRisk})
+              </div>
+            </div>
+
+            <div className="bg-white border border-purple-200 rounded-lg p-2.5 shadow-sm">
+              <div className="text-[10px] uppercase font-bold text-purple-600 tracking-wide">
+                {summaryMetrics.recoveryTime !== null ? t('summaryRecovery') : t('summaryTotalDose')}
+              </div>
+              <div className="text-xl font-bold text-purple-700 font-mono leading-tight">
+                {summaryMetrics.recoveryTime !== null
+                  ? summaryMetrics.recoveryTime
+                  : summaryMetrics.totalDose.toFixed(summaryMetrics.totalDose < 1 ? 2 : 1)}
+              </div>
+              <div className="text-[10px] text-slate-500">
+                {summaryMetrics.recoveryTime !== null
+                  ? `${t('summaryMin')} after stop`
+                  : summaryMetrics.drugUnit}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- QUICK PRESETS --- */}
+        <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 text-blue-600">
+              <Wand2 className="h-4 w-4" />
+              <h3 className="font-bold text-sm">{t('presetsTitle')}</h3>
+            </div>
+            <span className="text-[10px] text-slate-400">{t('presetTooltip')}</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+            {QUICK_PRESETS.map(preset => (
+              <button
+                key={preset.id}
+                onClick={() => applyPreset(preset)}
+                className="text-xs px-2 py-2 rounded-lg border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors text-left"
+              >
+                <div className="font-bold text-slate-700 leading-tight">{t(preset.labelKey)}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">{preset.drug}</div>
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* --- CONTROLS SECTION --- */}
         < div className="grid grid-cols-1 lg:grid-cols-12 gap-4" >
@@ -1513,6 +1749,13 @@ const App = () => {
                     ) : (
                       <input type="number" min="0" value={bolusTime} onChange={e => setBolusTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded px-1 h-10 text-center" />
                     )}
+                    {isClockMode && (
+                      <div className="flex gap-px mt-0.5">
+                        <button onClick={() => setBolusTime(Math.max(0, (currentSimMinutes ?? bolusTime) - 30))} className="flex-1 text-[8px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded border border-slate-200">{t('minus30m')}</button>
+                        <button onClick={() => setBolusTime(Math.max(0, (currentSimMinutes ?? bolusTime) - 60))} className="flex-1 text-[8px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded border border-slate-200">{t('minus1h')}</button>
+                        <button onClick={() => setBolusTime(Math.max(0, (currentSimMinutes ?? bolusTime) - 120))} className="flex-1 text-[8px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded border border-slate-200">{t('minus2h')}</button>
+                      </div>
+                    )}
                   </div>
                   <button onClick={addBolus} className="bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-lg shadow active:scale-95 transition-transform">
                     {editingId === 'bolus' ? <Save className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
@@ -1562,6 +1805,13 @@ const App = () => {
                       />
                     ) : (
                       <input type="number" min="0" value={infusionStartTime} onChange={e => setInfusionStartTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded px-1 h-10 text-center" />
+                    )}
+                    {isClockMode && (
+                      <div className="flex gap-px mt-0.5">
+                        <button onClick={() => setInfusionStartTime(Math.max(0, (currentSimMinutes ?? infusionStartTime) - 30))} className="flex-1 text-[8px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded border border-slate-200">{t('minus30m')}</button>
+                        <button onClick={() => setInfusionStartTime(Math.max(0, (currentSimMinutes ?? infusionStartTime) - 60))} className="flex-1 text-[8px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded border border-slate-200">{t('minus1h')}</button>
+                        <button onClick={() => setInfusionStartTime(Math.max(0, (currentSimMinutes ?? infusionStartTime) - 120))} className="flex-1 text-[8px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded border border-slate-200">{t('minus2h')}</button>
+                      </div>
                     )}
                   </div>
                   <div className="w-24">
