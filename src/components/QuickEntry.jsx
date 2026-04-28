@@ -213,7 +213,7 @@ export default function QuickEntry({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && canAdd) submit(); }}
-              placeholder="量"
+              placeholder={t('dose')}
               className="w-20 border border-slate-300 rounded px-2 py-1.5 text-sm font-bold text-center bg-purple-50 text-purple-900 focus:ring-2 focus:ring-purple-300 focus:outline-none"
               disabled={!valid}
             />
@@ -237,7 +237,7 @@ export default function QuickEntry({
               value={rate}
               onChange={(e) => setRate(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && canAdd) submit(); }}
-              placeholder="rate"
+              placeholder={t('rate')}
               className="w-20 border border-slate-300 rounded px-2 py-1.5 text-sm font-bold text-center bg-orange-50 text-orange-900 focus:ring-2 focus:ring-orange-300 focus:outline-none"
               disabled={!valid}
             />
@@ -264,7 +264,7 @@ export default function QuickEntry({
                 min="1"
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
-                placeholder="分"
+                placeholder={t('summaryMin')}
                 className="w-16 border border-slate-300 rounded px-1 py-1.5 text-sm text-center"
               />
             )}

@@ -1475,29 +1475,6 @@ const App = () => {
           </div>
         )}
 
-        {/* --- QUICK PRESETS --- */}
-        <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2 text-blue-600">
-              <Wand2 className="h-4 w-4" />
-              <h3 className="font-bold text-sm">{t('presetsTitle')}</h3>
-            </div>
-            <span className="text-[10px] text-slate-400">{t('presetTooltip')}</span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-            {QUICK_PRESETS.map(preset => (
-              <button
-                key={preset.id}
-                onClick={() => applyPreset(preset)}
-                className="text-xs px-2 py-2 rounded-lg border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors text-left"
-              >
-                <div className="font-bold text-slate-700 leading-tight">{t(preset.labelKey)}</div>
-                <div className="text-[10px] text-slate-400 mt-0.5">{preset.drug}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* --- CONTROLS SECTION --- */}
         < div className="grid grid-cols-1 lg:grid-cols-12 gap-4" >
 
@@ -1757,6 +1734,29 @@ const App = () => {
 
           </div >
         </div >
+
+        {/* --- QUICK PRESETS --- (relocated to bottom; rarely used in routine OR flow) */}
+        <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 text-blue-600">
+              <Wand2 className="h-4 w-4" />
+              <h3 className="font-bold text-sm">{t('presetsTitle')}</h3>
+            </div>
+            <span className="text-[10px] text-slate-400">{t('presetTooltip')}</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+            {QUICK_PRESETS.map(preset => (
+              <button
+                key={preset.id}
+                onClick={() => applyPreset(preset)}
+                className="text-xs px-2 py-2 rounded-lg border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors text-left"
+              >
+                <div className="font-bold text-slate-700 leading-tight">{t(preset.labelKey)}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">{preset.drug}</div>
+              </button>
+            ))}
+          </div>
+        </div>
       </main >
     </div >
   );
