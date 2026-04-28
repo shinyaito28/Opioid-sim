@@ -1680,14 +1680,20 @@ const App = () => {
               </div>
               <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
                 {events.length === 0 && <div className="p-4 text-center text-slate-400 text-xs">{t('noHistory')}</div>}
-                {events.sort((a, b) => a.time - b.time).map(evt => (
+                {events.sort((a, b) => a.time - b.time).map(evt => {
+                  const evtDrug = evt.drug || drug;
+                  const evtUnit = getDoseUnitForDrug(evtDrug);
+                  const evtShort = DRUG_SHORT_NAMES[evtDrug] || evtDrug;
+                  const evtColors = DRUG_COLORS[evtDrug] || { ce: '#a855f7' };
+                  return (
                   <div key={evt.id} className="p-2 px-4 flex justify-between items-center text-sm hover:bg-slate-50">
                     <div className="flex items-center gap-3">
-                      {evt.type === 'bolus' ? <Syringe className="w-4 h-4 text-purple-500" /> : <Activity className="w-4 h-4 text-orange-500" />}
+                      {evt.type === 'bolus' ? <Syringe className="w-4 h-4" style={{ color: evtColors.ce }} /> : <Activity className="w-4 h-4" style={{ color: evtColors.ce }} />}
+                      <span className="text-[10px] font-bold rounded px-1.5 py-0.5" style={{ backgroundColor: evtColors.ce + '22', color: evtColors.ce }}>{evtShort}</span>
                       <span className="font-mono text-slate-500 w-12 text-right">{evt.time} min</span>
                       <span className="font-medium text-slate-700">
-                        {evt.type === 'bolus' ? `${t('bolusLabel')}: ${evt.amount} ${getDoseUnit()}` :
-                          `${t('infusionLabel')}: ${evt.originalRate || evt.rate} ${evt.originalUnit || (getDoseUnit() + '/hr')} (${evt.duration}min)`}
+                        {evt.type === 'bolus' ? `${t('bolusLabel')}: ${evt.amount} ${evtUnit}` :
+                          `${t('infusionLabel')}: ${evt.originalRate || evt.rate} ${evt.originalUnit || (evtUnit + '/hr')} (${evt.duration}min)`}
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
@@ -1695,7 +1701,8 @@ const App = () => {
                       <button onClick={() => setEvents(events.filter(e => e.id !== evt.id))} title={t('deleteTooltip')} className="text-slate-300 hover:text-red-500 p-1.5 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div >
 
