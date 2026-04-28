@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea, Label } from 'recharts';
 import { Syringe, Clock, Settings, User, Activity, Plus, Trash2, Save, X, Eye, EyeOff, ZoomIn, Baby, Edit2, AlertCircle, Wand2, Info, FileText, Layers, FolderOpen, Download, MousePointerClick } from 'lucide-react';
 import TopBar from './components/TopBar';
+import QuickEntry from './components/QuickEntry';
 
 
 /**
@@ -597,6 +598,8 @@ const App = () => {
 
   const [savedTraces, setSavedTraces] = useState([]);
   const [savedScenarios, setSavedScenarios] = useState([]); // SAVE/RESTORE FEATURE
+  // Per-drug last-used amounts/rates so the QuickEntry form pre-fills sensibly when a drug is reselected.
+  const [lastDoseByDrug, setLastDoseByDrug] = useState({});
   const [showRanges, setShowRanges] = useState(true);
   const [yAxisMax, setYAxisMax] = useState(6);
   const [isAutoY, setIsAutoY] = useState(true);
@@ -622,6 +625,7 @@ const App = () => {
         if (parsed.simDuration) setSimDuration(parsed.simDuration);
         if (parsed.savedTraces) setSavedTraces(parsed.savedTraces);
         if (parsed.savedScenarios) setSavedScenarios(parsed.savedScenarios);
+        if (parsed.lastDoseByDrug) setLastDoseByDrug(parsed.lastDoseByDrug);
         if (parsed.isClockMode !== undefined) setIsClockMode(parsed.isClockMode);
         if (parsed.simSettings?.startTime) setStartTime(parsed.simSettings.startTime);
       } catch (e) {
@@ -640,11 +644,12 @@ const App = () => {
       simDuration,
       savedTraces,
       savedScenarios,
+      lastDoseByDrug,
       isClockMode,
       simSettings: { startTime }
     };
     localStorage.setItem('opioid_sim_data', JSON.stringify(dataToSave));
-  }, [patient, drug, model, events, simDuration, savedTraces, savedScenarios, isClockMode, startTime]);
+  }, [patient, drug, model, events, simDuration, savedTraces, savedScenarios, lastDoseByDrug, isClockMode, startTime]);
 
   const [editingId, setEditingId] = useState(null);
 
@@ -910,6 +915,77 @@ const App = () => {
       duration: isInfiniteDuration ? (simDuration - newStartTime + 60) : parseFloat(infusionDuration),
       isInfinite: isInfiniteDuration
     }]);
+    setEditingId(null);
+  };
+
+  // QuickEntry-only bolus add: takes drug+amount+time directly so it's independent of the
+  // detailed-edit form's bolusAmount/bolusTime state. Handles the same isClockMode backward
+  // shift logic as addBolus, and switches drug if the chip differs from current.
+  const quickAddBolus = (drugArg, amountVal, timeArg) => {
+    if (drugArg !== drug) setDrug(drugArg);
+
+    let newTime = timeArg;
+    let currentEvents = [...events];
+
+    if (isClockMode && newTime < 0) {
+      const offset = -newTime;
+      const [sh, sm] = startTime.split(':').map(Number);
+      let totalStartMin = sh * 60 + sm - offset;
+      if (totalStartMin < 0) totalStartMin += 24 * 60;
+      const newH = Math.floor(totalStartMin / 60);
+      const newM = totalStartMin % 60;
+      setStartTime(`${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`);
+      currentEvents = currentEvents.map((e) => ({ ...e, time: e.time + offset }));
+      newTime = 0;
+    }
+
+    setEvents([...currentEvents, { id: Date.now(), type: 'bolus', time: newTime, amount: amountVal }]);
+    setLastDoseByDrug((prev) => ({ ...prev, [drugArg]: { ...prev[drugArg], bolusAmount: amountVal } }));
+    setEditingId(null);
+  };
+
+  const quickAddInfusion = (drugArg, rateVal, unitArg, timeArg, durationVal, infinite) => {
+    if (drugArg !== drug) setDrug(drugArg);
+
+    let newStartTime = timeArg;
+    let currentEvents = [...events];
+
+    if (isClockMode && newStartTime < 0) {
+      const offset = -newStartTime;
+      const [sh, sm] = startTime.split(':').map(Number);
+      let totalStartMin = sh * 60 + sm - offset;
+      if (totalStartMin < 0) totalStartMin += 24 * 60;
+      const newH = Math.floor(totalStartMin / 60);
+      const newM = totalStartMin % 60;
+      setStartTime(`${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`);
+      currentEvents = currentEvents.map((e) => ({ ...e, time: e.time + offset }));
+      newStartTime = 0;
+    }
+
+    const standardRate = convertToStandardUnit(rateVal, unitArg, patient.weight, drugArg);
+    setEvents([
+      ...currentEvents,
+      {
+        id: Date.now(),
+        type: 'infusion',
+        time: newStartTime,
+        rate: standardRate,
+        originalRate: rateVal,
+        originalUnit: unitArg,
+        duration: infinite ? Math.max(0, simDuration - newStartTime + 60) : durationVal,
+        isInfinite: infinite,
+      },
+    ]);
+    setLastDoseByDrug((prev) => ({
+      ...prev,
+      [drugArg]: {
+        ...prev[drugArg],
+        infusionRate: rateVal,
+        infusionUnit: unitArg,
+        infusionDuration: durationVal,
+        isInfinite: infinite,
+      },
+    }));
     setEditingId(null);
   };
 
@@ -1220,6 +1296,23 @@ const App = () => {
           paddingRight: 'max(0.75rem, env(safe-area-inset-right))',
         }}
       >
+
+        <QuickEntry
+          drug={drug}
+          setDrug={setDrug}
+          patient={patient}
+          isClockMode={isClockMode}
+          startTime={startTime}
+          currentSimMinutes={currentSimMinutes}
+          drugList={Object.keys(DRUG_UNITS)}
+          drugUnits={DRUG_UNITS}
+          drugShortNames={DRUG_SHORT_NAMES}
+          clinicalDefaults={CLINICAL_DEFAULTS}
+          lastDoseByDrug={lastDoseByDrug}
+          quickAddBolus={quickAddBolus}
+          quickAddInfusion={quickAddInfusion}
+          t={t}
+        />
 
         {/* --- MAIN CHART SECTION --- */}
         <div className="bg-white p-2 md:p-4 rounded-xl shadow border border-slate-200">
