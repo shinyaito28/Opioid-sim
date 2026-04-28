@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea, Label } from 'recharts';
 import { Syringe, Clock, Settings, User, Activity, Plus, Trash2, Save, X, Eye, EyeOff, ZoomIn, Baby, Edit2, AlertCircle, Wand2, Info, FileText, Layers, FolderOpen, Download, MousePointerClick } from 'lucide-react';
 
 
@@ -77,6 +77,73 @@ const AVAILABLE_MODELS = {
   'Hydromorphone': ['Jeleazcov (2014) Adult', 'Balyan (2020) Pediatric', 'Standard (Adult)', 'Pediatric (Scaled)'],
   'Methadone': ['Standard (Adult)'],
   'Sufentanil': ['Gepts (1995) Adult', 'Bartkowska-Sniatkowska (2016) PICU']
+};
+
+// Short labels for chart event markers (kept ASCII so they survive tight spacing)
+const DRUG_SHORT_NAMES = {
+  'Fentanyl': 'Fent',
+  'Remifentanil': 'Remi',
+  'Morphine': 'Mor',
+  'Hydromorphone': 'HM',
+  'Methadone': 'Met',
+  'Sufentanil': 'Suf'
+};
+
+const getDoseUnitForDrug = (drug) => CLINICAL_DEFAULTS[drug]?.unit || 'mcg';
+
+// Custom Recharts tooltip — keeps default Cp/Ce values, then lists any dosing events at/near the hover time.
+const ChartTooltip = ({ active, payload, label, drug, events, isClockMode, startTime }) => {
+  if (!active || !payload || payload.length === 0) return null;
+  const time = Number(label);
+  const shortName = DRUG_SHORT_NAMES[drug] || drug;
+  const unit = getDoseUnitForDrug(drug);
+  const headerLabel = isClockMode
+    ? `${minutesToTime(time, startTime)} (${time} min)`
+    : `${time} min`;
+
+  const nearbyEvents = events.filter((e) => {
+    if (e.type === 'bolus') return Math.abs(e.time - time) <= 0.5;
+    if (e.type === 'infusion') {
+      const endTime = e.isInfinite ? Infinity : e.time + e.duration;
+      return time >= e.time - 0.5 && time <= endTime + 0.5;
+    }
+    return false;
+  });
+
+  return (
+    <div className="bg-white/95 border border-slate-200 rounded-lg shadow p-2 text-xs min-w-[140px]">
+      <div className="font-semibold text-slate-700 mb-1">{headerLabel}</div>
+      {payload.map((entry, idx) => (
+        <div key={idx} className="flex justify-between gap-3" style={{ color: entry.color }}>
+          <span>{entry.name}</span>
+          <span className="font-mono font-bold">{entry.value?.toFixed?.(2) ?? entry.value}</span>
+        </div>
+      ))}
+      {nearbyEvents.length > 0 && (
+        <div className="mt-1.5 pt-1.5 border-t border-slate-200 space-y-0.5">
+          {nearbyEvents.map((e) => {
+            const evtTimeLabel = isClockMode ? minutesToTime(e.time, startTime) : `${e.time}min`;
+            if (e.type === 'bolus') {
+              return (
+                <div key={e.id} className="text-[10px] text-purple-700">
+                  <span className="font-bold">▼</span> {shortName} {e.amount}{unit} @{evtTimeLabel}
+                </div>
+              );
+            }
+            const rateText = e.originalRate && e.originalUnit
+              ? `${e.originalRate} ${e.originalUnit}`
+              : `${e.rate}/hr`;
+            const durLabel = e.isInfinite ? '∞' : `${e.duration}min`;
+            return (
+              <div key={e.id} className="text-[10px] text-orange-700">
+                <span className="font-bold">▶</span> {shortName} {rateText} ({durLabel})
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 };
 
 /**
@@ -1250,8 +1317,14 @@ const App = () => {
                 )}
 
                 <Tooltip
-                  labelFormatter={(v) => isClockMode ? `${minutesToTime(v, startTime)} (${v} min)` : `${v} min`}
-                  contentStyle={{ fontSize: '12px', borderRadius: '8px' }}
+                  content={
+                    <ChartTooltip
+                      drug={drug}
+                      events={events}
+                      isClockMode={isClockMode}
+                      startTime={startTime}
+                    />
+                  }
                 />
                 <Legend verticalAlign="top" height={36} />
 
@@ -1293,9 +1366,11 @@ const App = () => {
                 )}
 
                 {/* DOSING EVENT MARKERS */}
-                {events.map((evt) => {
+                {events.flatMap((evt) => {
+                  const shortName = DRUG_SHORT_NAMES[drug] || drug;
                   if (evt.type === 'bolus') {
-                    return (
+                    const bolusText = `${shortName} ${evt.amount}${getDoseUnit()}`;
+                    return [
                       <ReferenceLine
                         key={`evt-bolus-${evt.id}`}
                         x={evt.time}
@@ -1303,24 +1378,52 @@ const App = () => {
                         strokeWidth={1.5}
                         strokeDasharray="2 3"
                         ifOverflow="extendDomain"
-                        label={{ value: '▼', position: 'top', fill: '#a855f7', fontSize: 12, fontWeight: 'bold' }}
-                      />
-                    );
+                      >
+                        <Label value="▼" position="top" fill="#7e22ce" fontSize={13} fontWeight="bold" offset={2} />
+                        <Label value={bolusText} position="insideTopLeft" fill="#7e22ce" fontSize={11} fontWeight="bold" offset={4} />
+                      </ReferenceLine>
+                    ];
                   }
                   if (evt.type === 'infusion') {
                     const endTime = evt.isInfinite ? simDuration : evt.time + evt.duration;
-                    return (
+                    const rateText = evt.originalRate && evt.originalUnit
+                      ? `${evt.originalRate} ${evt.originalUnit}`
+                      : `${evt.rate}/hr`;
+                    const inflText = `▶ ${shortName} ${rateText}`;
+                    return [
                       <ReferenceArea
-                        key={`evt-inf-${evt.id}`}
+                        key={`evt-inf-area-${evt.id}`}
                         x1={evt.time}
                         x2={endTime}
-                        fill="#fb923c"
+                        fill="#fed7aa"
                         fillOpacity={0.07}
                         ifOverflow="hidden"
-                      />
-                    );
+                      />,
+                      <ReferenceLine
+                        key={`evt-inf-start-${evt.id}`}
+                        x={evt.time}
+                        stroke="#fb923c"
+                        strokeWidth={1.5}
+                        strokeDasharray="3 2"
+                        ifOverflow="extendDomain"
+                      >
+                        <Label value={inflText} position="insideTopLeft" fill="#c2410c" fontSize={10} fontWeight="bold" offset={4} dy={18} />
+                      </ReferenceLine>,
+                      !evt.isInfinite && (
+                        <ReferenceLine
+                          key={`evt-inf-end-${evt.id}`}
+                          x={endTime}
+                          stroke="#fb923c"
+                          strokeWidth={1}
+                          strokeDasharray="3 2"
+                          ifOverflow="hidden"
+                        >
+                          <Label value="◀" position="insideTopRight" fill="#c2410c" fontSize={11} offset={4} dy={18} />
+                        </ReferenceLine>
+                      )
+                    ].filter(Boolean);
                   }
-                  return null;
+                  return [];
                 })}
 
                 {/* SAVED TRACES */}
