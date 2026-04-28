@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['apple-touch-icon.png', 'icon-32.png'],
       manifest: {
-        name: 'Opioid Simulator',
-        short_name: 'OpioidSim',
-        description: 'PK/PD simulator for opioids — research/educational use only',
+        name: 'Anesthesia PK/PD Simulator',
+        short_name: 'AnesthesiaSim',
+        description: 'PK/PD simulator for opioids and sedatives — research/educational use only',
         theme_color: '#1e293b',
         background_color: '#f8fafc',
         display: 'standalone',

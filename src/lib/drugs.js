@@ -53,6 +53,14 @@ export const THERAPEUTIC_RANGES = {
     analgesiaMax: 0.6,
     respiratoryRisk: 0.5,
     label: 'Analgesia (0.2-0.6)'
+  },
+  'Propofol': {
+    // Sedative — therapeutic Ce typically 1.5-4.5 mcg/mL for sedation, 3-6 for GA (BIS 40-60).
+    // No analgesiaMin/Max or respiratoryRisk defined: Propofol is intentionally excluded from the
+    // Combined Opioid Burden Index (Phase 5-G-1 scope decision); the Bouillon synergy surface
+    // (Phase 5-G-5) will add proper hypnotic-analgesic interaction modelling.
+    bisTarget: { min: 3.0, max: 5.0 }, // mcg/mL — Schnider/Eleveld TCI band for GA
+    label: 'BIS target (3.0-5.0 mcg/mL)'
   }
 };
 
@@ -62,7 +70,8 @@ export const DRUG_UNITS = {
   'Morphine': ['mg/kg/hr', 'mg/hr', 'mcg/kg/min'],
   'Hydromorphone': ['mg/kg/hr', 'mg/hr', 'mcg/kg/min'],
   'Methadone': ['mg/hr'],
-  'Sufentanil': ['mcg/kg/hr', 'mcg/hr']
+  'Sufentanil': ['mcg/kg/hr', 'mcg/hr'],
+  'Propofol': ['mcg/kg/min', 'mg/kg/hr', 'mg/hr'] // typical TCI / clinical infusion units
 };
 
 export const CLINICAL_DEFAULTS = {
@@ -71,7 +80,8 @@ export const CLINICAL_DEFAULTS = {
   'Morphine': { bolus: 0.1, rate: 0.03, duration: 120, unit: 'mg' }, // Bolus: 0.1 mg/kg, Rate: 0.03 mg/kg/hr
   'Hydromorphone': { bolus: 0.02, rate: 0.005, duration: 120, unit: 'mg' }, // Bolus: 0.02 mg/kg, Rate: 0.005 mg/kg/hr
   'Methadone': { bolus: 0.1, rate: 0, duration: 60, unit: 'mg' }, // Bolus: 0.1 mg/kg
-  'Sufentanil': { bolus: 0.2, rate: 0.3, duration: 60, unit: 'mcg' } // Bolus: 0.2 mcg/kg, Rate: 0.3 mcg/kg/hr
+  'Sufentanil': { bolus: 0.2, rate: 0.3, duration: 60, unit: 'mcg' }, // Bolus: 0.2 mcg/kg, Rate: 0.3 mcg/kg/hr
+  'Propofol': { bolus: 1.5, rate: 100, duration: 60, unit: 'mg' } // Bolus: 1.5 mg/kg (induction), Rate: 100 mcg/kg/min (GA maintenance)
 };
 
 export const AVAILABLE_MODELS = {
@@ -80,7 +90,8 @@ export const AVAILABLE_MODELS = {
   'Morphine': ['Mazoit (2007) Adult', 'Bouwmeester (2004) Pediatric', 'Anand (2008) Neonate'],
   'Hydromorphone': ['Jeleazcov (2014) Adult', 'Balyan (2020) Pediatric', 'Standard (Adult)', 'Pediatric (Scaled)'],
   'Methadone': ['Standard (Adult)'],
-  'Sufentanil': ['Gepts (1995) Adult', 'Bartkowska-Sniatkowska (2016) PICU']
+  'Sufentanil': ['Gepts (1995) Adult', 'Bartkowska-Sniatkowska (2016) PICU'],
+  'Propofol': ['Eleveld (2018) General-purpose']
 };
 
 // Short labels for chart event markers and QuickEntry chips
@@ -90,11 +101,13 @@ export const DRUG_SHORT_NAMES = {
   'Morphine': 'Mor',
   'Hydromorphone': 'HM',
   'Methadone': 'Met',
-  'Sufentanil': 'Suf'
+  'Sufentanil': 'Suf',
+  'Propofol': 'Prop'
 };
 
 // Per-drug colour pair (Ce solid + Cp lighter) for chart lines and event markers.
 // Selected for WCAG AA contrast in both light and dark themes — used by Phase 5-C multi-drug rendering.
+// Phase 5-G-1 added Propofol as teal — picked to be distinguishable from existing 6 opioids.
 export const DRUG_COLORS = {
   Fentanyl:      { ce: '#2563eb', cp: '#93c5fd' }, // blue
   Remifentanil:  { ce: '#0891b2', cp: '#67e8f9' }, // cyan
@@ -102,13 +115,42 @@ export const DRUG_COLORS = {
   Morphine:      { ce: '#dc2626', cp: '#fca5a5' }, // red
   Hydromorphone: { ce: '#ea580c', cp: '#fdba74' }, // orange
   Methadone:     { ce: '#16a34a', cp: '#86efac' }, // green
+  Propofol:      { ce: '#0d9488', cp: '#5eead4' }, // teal — sedative class
+};
+
+// Drug class — affects whether Ce contributes to the Combined Opioid Burden Index.
+// Only 'opioid' drugs are included in burden; 'sedative' drugs render Cp/Ce but don't contribute.
+export const DRUG_CLASS = {
+  Fentanyl:      'opioid',
+  Remifentanil:  'opioid',
+  Morphine:      'opioid',
+  Hydromorphone: 'opioid',
+  Methadone:     'opioid',
+  Sufentanil:    'opioid',
+  Propofol:      'sedative',
+};
+
+// Display unit per drug. The simulation engine emits values in ng/mL internally; the UI divides
+// by `divisor` before plotting and tooltip display. Sedatives use mcg/mL because therapeutic
+// concentrations are 1000× larger than opioid Ce — sharing a ng/mL axis would make opioid curves
+// invisible at the bottom of an auto-scaled chart.
+export const DRUG_DISPLAY = {
+  Fentanyl:      { unit: 'ng/mL',  divisor: 1 },
+  Remifentanil:  { unit: 'ng/mL',  divisor: 1 },
+  Morphine:      { unit: 'ng/mL',  divisor: 1 },
+  Hydromorphone: { unit: 'ng/mL',  divisor: 1 },
+  Methadone:     { unit: 'ng/mL',  divisor: 1 },
+  Sufentanil:    { unit: 'ng/mL',  divisor: 1 },
+  Propofol:      { unit: 'mcg/mL', divisor: 1000 },
 };
 
 export const DRUG_LIST = Object.keys(DRUG_UNITS);
 
 export const getDoseUnitForDrug = (drug) => CLINICAL_DEFAULTS[drug]?.unit || 'mcg';
 
-const MG_DRUGS = ['Morphine', 'Hydromorphone', 'Methadone'];
+// Drugs whose user-facing dose is in mg (not mcg). The simulation engine multiplies bolus
+// amounts by 1000 for these so all internal mass quantities are in mcg, giving Cp/Ce in ng/mL.
+const MG_DRUGS = ['Morphine', 'Hydromorphone', 'Methadone', 'Propofol'];
 
 export const calculateLBM = (weight, height, gender) => {
   if (!height || !weight) return weight;
@@ -116,6 +158,111 @@ export const calculateLBM = (weight, height, gender) => {
     return (1.1 * weight) - (128 * ((weight / height) ** 2));
   }
   return (1.07 * weight) - (148 * ((weight / height) ** 2));
+};
+
+// --- Eleveld 2018 Propofol PK helpers ---
+// All 18 θ values verified by cross-reference between two open-source TCI implementations
+// (ysuzuki1978/propofol-tci-simulator JS, clybb7/propPK MATLAB) plus the BJA 2018 abstract.
+// PMID:29661412. doi:10.1016/j.bja.2018.01.018.
+const ELEVELD_THETA = {
+  1:  6.28,    // V1 reference (L) — 70kg/35yr/170cm/male/no opioid/arterial
+  2:  25.5,    // V2 reference (L)
+  3:  273,     // V3 reference (L)
+  4:  1.79,    // CL reference, male (L/min)
+  5:  1.75,    // Q2 reference, arterial (L/min)
+  6:  1.11,    // Q3 reference (L/min)
+  7:  0.191,   // residual error (not used in deterministic calc)
+  8:  42.3,    // CL maturation E50 (weeks PMA)
+  9:  9.06,    // CL maturation Hill slope
+  10: -0.0156, // V2 ageing exponent
+  11: -0.00286,// CL effect of concomitant opioids: exp(θ11 × age)
+  12: 33.6,    // V1 weight Hill E50 (kg, slope = 1)
+  13: -0.0138, // V3 effect of concomitant opioids: exp(θ13 × age)
+  14: 68.3,    // Q3 maturation E50 (weeks PMA, slope = 1)
+  15: 2.10,    // CL reference, female (L/min)
+  16: 1.30,    // Q2 boost when Q3 maturation incomplete: (1 + θ16 × (1 − fQ3mat))
+  17: 1.42,    // V1 venous-vs-arterial multiplier (unused in default arterial mode)
+  18: 0.68     // Q2 venous-vs-arterial multiplier
+};
+
+// Al-Sallami fat-free-mass equation, verbatim from Eleveld 2018's covariate model.
+// `gender` is 'male' | 'female'.
+const alSallamiFFM = (weight, height, age, gender) => {
+  if (!height || !weight) return weight;
+  if (age < 2) return weight * 0.82; // pediatric override (Source A's heuristic)
+  const bmi = weight / Math.pow(height / 100, 2);
+  if (gender === 'male') {
+    const t1 = (0.88 * 9270 * weight) / (6680 + 216 * bmi);
+    const t2 = (1 - 0.88) / (1 + Math.pow(age / 13.4, -12.7));
+    const t3 = 1.11 * weight - 128 * Math.pow(weight / height, 2);
+    return t1 + t2 * t3;
+  }
+  const t1 = (1.11 * 9270 * weight) / (8780 + 244 * bmi);
+  const t2 = (1 - 1.11) / (1 + Math.pow(age / 7.1, -1.1));
+  const t3 = 1.07 * weight - 148 * Math.pow(weight / height, 2);
+  return t1 + t2 * t3;
+};
+
+const fSigmoid = (x, e50, gamma) =>
+  Math.pow(x, gamma) / (Math.pow(x, gamma) + Math.pow(e50, gamma));
+const fAgeing = (rate, age, ageRef = 35) => Math.exp(rate * (age - ageRef));
+const fOpiates = (rate, age, opioidCoadmin) => (opioidCoadmin ? Math.exp(rate * age) : 1);
+
+// Compute Eleveld 2018 propofol PK parameters for a given patient.
+// `opioidCoadmin` defaults to true (Eleveld's reference condition with concomitant anaesthetic drugs);
+// `arterialSampling` defaults to true (TCI standard). Phase 5-G-1 hardcodes both — Phase 5-G-5
+// (Bouillon synergy) will derive opioidCoadmin from activeDrugs.
+const getEleveldPropofol = (patient, { opioidCoadmin = true, arterialSampling = true } = {}) => {
+  const { age, weight, height, gender } = patient;
+  const T = ELEVELD_THETA;
+
+  const WGT_REF = 70;
+  const PMA_REF_WK = 35 * 52 + 40; // 1860 weeks (term-born 35-year-old)
+  const pma = age * 52 + 40;        // post-menstrual age (weeks)
+
+  const ffm = alSallamiFFM(weight, height || 170, age, gender);
+  const ffmRef = alSallamiFFM(WGT_REF, 170, 35, 'male'); // ~54.4 kg
+
+  // Volumes
+  const fCentralWgt    = fSigmoid(weight,  T[12], 1);
+  const fCentralWgtRef = fSigmoid(WGT_REF, T[12], 1);
+
+  let V1 = T[1] * (fCentralWgt / fCentralWgtRef);
+  const V2 = T[2] * (weight / WGT_REF) * fAgeing(T[10], age);
+  const V3 = T[3] * (ffm / ffmRef) * fOpiates(T[13], age, opioidCoadmin);
+
+  // Clearances
+  const fCLmat    = fSigmoid(pma,        T[8], T[9]);
+  const fCLmatRef = fSigmoid(PMA_REF_WK, T[8], T[9]);
+  const CLbase = gender === 'female' ? T[15] : T[4];
+
+  const Cl = CLbase
+    * Math.pow(weight / WGT_REF, 0.75)
+    * (fCLmat / fCLmatRef)
+    * fOpiates(T[11], age, opioidCoadmin);
+
+  const fQ3mat    = fSigmoid(pma,        T[14], 1);
+  const fQ3matRef = fSigmoid(PMA_REF_WK, T[14], 1);
+
+  let Q2 = T[5]
+    * Math.pow(V2 / T[2], 0.75)
+    * (1 + T[16] * (1 - fQ3mat));
+
+  const Q3 = T[6]
+    * Math.pow(V3 / T[3], 0.75)
+    * (fQ3mat / fQ3matRef);
+
+  // Venous-sampling correction (verified θ values, but neither reference repo applies them explicitly;
+  // formula here follows the paper's text, opt-in only when caller passes arterialSampling: false).
+  if (!arterialSampling) {
+    V1 *= T[17];
+    Q2 *= (1 + T[18] * (1 - fQ3mat));
+  }
+
+  // ke0 from Source B's verified line: Oke0 = (weight/70)^-0.25 × 0.146.
+  const ke0 = 0.146 * Math.pow(weight / WGT_REF, -0.25);
+
+  return { V1, V2, V3, Cl, Q2, Q3, ke0 };
 };
 
 // 3-compartment + effect-site PK parameters keyed by (drug, model). Falls back to a benign
@@ -333,6 +480,21 @@ export const getPKParameters = (drug, model, patient) => {
       params.Q2 = (15.3 / 60) * (wRatio ** 0.75);
       params.Q3 = 0;
       params.ke0 = 0.15;
+    }
+  }
+  // --- PROPOFOL ---
+  else if (drug === 'Propofol') {
+    if (model === 'Eleveld (2018) General-purpose') {
+      // Eleveld DJ et al. Br J Anaesth 2018;120:942-959. PMID:29661412.
+      // Full covariate model — see getEleveldPropofol() above for the equations and source notes.
+      const eleveld = getEleveldPropofol(patient);
+      params.V1 = eleveld.V1;
+      params.V2 = eleveld.V2;
+      params.V3 = eleveld.V3;
+      params.Cl = eleveld.Cl;
+      params.Q2 = eleveld.Q2;
+      params.Q3 = eleveld.Q3;
+      params.ke0 = eleveld.ke0;
     }
   }
 

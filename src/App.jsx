@@ -12,6 +12,8 @@ import {
   AVAILABLE_MODELS,
   DRUG_SHORT_NAMES,
   DRUG_COLORS,
+  DRUG_CLASS,
+  DRUG_DISPLAY,
   DRUG_LIST,
   getDoseUnitForDrug,
   getPKParameters,
@@ -148,6 +150,7 @@ const getModelRequirements = (drug, model) => {
   if (drug === 'Fentanyl' && model.includes('Shafer')) return [];
   if (drug === 'Methadone') return ['weight'];
   if (drug === 'Sufentanil') return ['weight'];
+  if (drug === 'Propofol') return ['age', 'weight', 'height', 'gender']; // Eleveld uses all four covariates
   return ['weight'];
 };
 
@@ -164,6 +167,7 @@ const getBestModel = (drug, age) => {
   if (drug === 'Hydromorphone') return isPeds ? 'Balyan (2020) Pediatric' : 'Jeleazcov (2014) Adult';
   if (drug === 'Methadone') return 'Standard (Adult)';
   if (drug === 'Sufentanil') return isPeds ? 'Bartkowska-Sniatkowska (2016) PICU' : 'Gepts (1995) Adult';
+  if (drug === 'Propofol') return 'Eleveld (2018) General-purpose'; // Eleveld covers all ages
   return 'Bae (2020) Adult';
 };
 
@@ -177,6 +181,7 @@ const estimateBolus = (drug, weight) => {
   else if (drug === 'Hydromorphone') dose = weight * 0.02; // 0.02 mg/kg (approx 1.5mg/70kg) - cleaner than 0.015
   else if (drug === 'Methadone') dose = weight * 0.1;    // 0.1 mg/kg
   else if (drug === 'Sufentanil') dose = weight * 0.1;   // 0.1 mcg/kg (cleaner than 0.15)
+  else if (drug === 'Propofol') dose = weight * 1.5;     // 1.5 mg/kg (induction)
 
   if (dose === 0) return 0;
 
@@ -390,44 +395,59 @@ const App = () => {
   }, [currentSimMinutes, simData]);
 
   // --- SUMMARY METRICS ---
+  // For opioids: onset = time to Ce ≥ analgesiaMin; respRisk = minutes Ce ≥ respiratoryRisk.
+  // For sedatives (Propofol): onset = time to Ce ≥ bisTarget.min; deepCount = minutes Ce ≥ bisTarget.max.
+  // Cp/Ce values are in internal ng/mL — chart UI applies DRUG_DISPLAY[drug].divisor at render time.
   const summaryMetrics = useMemo(() => {
     if (!simData || simData.length === 0) return null;
     const range = THERAPEUTIC_RANGES[drug];
     if (!range) return null;
 
+    // Resolve which thresholds apply for the current drug.
+    const onsetThreshold = range.analgesiaMin ?? range.bisTarget?.min;
+    const respRiskThreshold = range.respiratoryRisk ?? range.bisTarget?.max;
+    const recoveryThreshold = range.analgesiaMin ?? range.bisTarget?.min;
+
+    // Internal Ce/Cp are in ng/mL; sedatives need to be displayed in mcg/mL.
+    // Multiply the threshold values by the inverse of the divisor to compare in same units.
+    // bisTarget for Propofol is given in mcg/mL → multiply by 1000 to compare with ng/mL ce values.
+    const isSedative = !!range.bisTarget;
+    const thresholdScale = isSedative ? (DRUG_DISPLAY[drug]?.divisor || 1) : 1;
+    const onsetThresholdInternal = onsetThreshold != null ? onsetThreshold * thresholdScale : null;
+    const respRiskThresholdInternal = respRiskThreshold != null ? respRiskThreshold * thresholdScale : null;
+    const recoveryThresholdInternal = recoveryThreshold != null ? recoveryThreshold * thresholdScale : null;
+
     let peakCe = { value: 0, time: 0 };
     let peakCp = { value: 0, time: 0 };
     let onsetTime = null;
     let respRiskCount = 0;
-    let aboveUpperCount = 0;
 
     simData.forEach(d => {
       if (d.ce > peakCe.value) peakCe = { value: d.ce, time: d.time };
       if (d.cp > peakCp.value) peakCp = { value: d.cp, time: d.time };
-      if (onsetTime === null && d.ce >= range.analgesiaMin) onsetTime = d.time;
-      if (d.ce >= range.respiratoryRisk) respRiskCount++;
-      if (d.ce >= range.analgesiaMax) aboveUpperCount++;
+      if (onsetTime === null && onsetThresholdInternal != null && d.ce >= onsetThresholdInternal) onsetTime = d.time;
+      if (respRiskThresholdInternal != null && d.ce >= respRiskThresholdInternal) respRiskCount++;
     });
 
     // Total dose: sum bolus + integrate infusion
     let totalDose = 0;
     events.forEach(evt => {
+      if ((evt.drug || drug) !== drug) return; // only count current-drug events
       if (evt.type === 'bolus') {
         totalDose += evt.amount;
       } else if (evt.type === 'infusion') {
         let effDuration = evt.duration;
         if (evt.isInfinite) effDuration = Math.max(0, simDuration - evt.time);
-        // standardRate is in mcg/hr (or mg/hr if mg drug). Bolus amount is in displayed unit (matching).
         totalDose += evt.rate * (effDuration / 60);
       }
     });
 
-    // Recovery: after the last terminating infusion stops, when ce drops below analgesiaMin
+    // Recovery: after the last terminating infusion stops, when ce drops below threshold
     let recoveryTime = null;
-    const finiteInfusions = events.filter(e => e.type === 'infusion' && !e.isInfinite);
-    if (finiteInfusions.length > 0) {
+    const finiteInfusions = events.filter(e => (e.drug || drug) === drug && e.type === 'infusion' && !e.isInfinite);
+    if (finiteInfusions.length > 0 && recoveryThresholdInternal != null) {
       const lastStop = Math.max(...finiteInfusions.map(e => e.time + e.duration));
-      const recPoint = simData.find(d => d.time >= lastStop && d.ce < range.analgesiaMin);
+      const recPoint = simData.find(d => d.time >= lastStop && d.ce < recoveryThresholdInternal);
       if (recPoint) recoveryTime = recPoint.time - lastStop;
     }
 
@@ -436,10 +456,14 @@ const App = () => {
       peakCp,
       onsetTime,
       respRiskMin: respRiskCount,
-      aboveUpperMin: aboveUpperCount,
       totalDose,
       recoveryTime,
       drugUnit: CLINICAL_DEFAULTS[drug]?.unit || 'mcg',
+      isSedative,
+      onsetThreshold,        // in display units (ng/mL or mcg/mL)
+      respRiskThreshold,     // in display units
+      displayUnit: DRUG_DISPLAY[drug]?.unit || 'ng/mL',
+      displayDivisor: DRUG_DISPLAY[drug]?.divisor || 1,
     };
   }, [simData, events, drug, simDuration]);
 
@@ -1182,20 +1206,29 @@ const App = () => {
                   />
                 ))}
 
-                {/* CURRENT SIMULATION — one Cp + Ce pair per active drug, drug-coloured */}
+                {/* CURRENT SIMULATION — one Cp + Ce pair per active drug, drug-coloured.
+                    Sedatives (Propofol) are scaled from internal ng/mL to display mcg/mL via
+                    DRUG_DISPLAY[d].divisor so opioids and sedatives can share the left axis
+                    without the opioid curves becoming invisible at the bottom. */}
                 {[...activeDrugs].flatMap((d) => {
                   const sim = simByDrug.get(d);
                   if (!sim || sim.length === 0) return [];
                   const colors = DRUG_COLORS[d] || { ce: '#ec4899', cp: '#3b82f6' };
                   const shortName = DRUG_SHORT_NAMES[d] || d;
+                  const displayUnit = DRUG_DISPLAY[d]?.unit || 'ng/mL';
+                  const divisor = DRUG_DISPLAY[d]?.divisor || 1;
+                  const displaySim = divisor === 1
+                    ? sim
+                    : sim.map((p) => ({ time: p.time, cp: p.cp / divisor, ce: p.ce / divisor }));
+                  const unitTag = displayUnit === 'ng/mL' ? '' : ` ${displayUnit}`;
                   return [
                     <Line
                       key={`cp-${d}`}
                       yAxisId="left"
-                      data={sim}
+                      data={displaySim}
                       type="monotone"
                       dataKey="cp"
-                      name={`Cp ${shortName}`}
+                      name={`Cp ${shortName}${unitTag}`}
                       stroke={colors.cp}
                       strokeWidth={2}
                       strokeOpacity={0.6}
@@ -1206,10 +1239,10 @@ const App = () => {
                     <Line
                       key={`ce-${d}`}
                       yAxisId="left"
-                      data={sim}
+                      data={displaySim}
                       type="monotone"
                       dataKey="ce"
-                      name={`Ce ${shortName}`}
+                      name={`Ce ${shortName}${unitTag}`}
                       stroke={colors.ce}
                       strokeWidth={3}
                       dot={false}
@@ -1389,30 +1422,38 @@ const App = () => {
             <div className="bg-white border border-pink-200 rounded-lg p-2.5 shadow-sm">
               <div className="text-[10px] uppercase font-bold text-pink-600 tracking-wide">{t('summaryPeakCe')}</div>
               <div className="text-xl font-bold text-pink-700 font-mono leading-tight">
-                {summaryMetrics.peakCe.value.toFixed(2)}
+                {(summaryMetrics.peakCe.value / summaryMetrics.displayDivisor).toFixed(2)}
               </div>
               <div className="text-[10px] text-slate-500">
-                ng/mL {t('summaryAt')} {summaryMetrics.peakCe.time}{t('summaryMin')}
+                {summaryMetrics.displayUnit} {t('summaryAt')} {summaryMetrics.peakCe.time}{t('summaryMin')}
               </div>
             </div>
 
             <div className="bg-white border border-emerald-200 rounded-lg p-2.5 shadow-sm">
-              <div className="text-[10px] uppercase font-bold text-emerald-600 tracking-wide">{t('summaryOnset')}</div>
+              <div className="text-[10px] uppercase font-bold text-emerald-600 tracking-wide">
+                {summaryMetrics.isSedative ? 'BIS Onset' : t('summaryOnset')}
+              </div>
               <div className="text-xl font-bold text-emerald-700 font-mono leading-tight">
                 {summaryMetrics.onsetTime !== null ? `${summaryMetrics.onsetTime}` : '—'}
               </div>
               <div className="text-[10px] text-slate-500">
-                {summaryMetrics.onsetTime !== null ? `${t('summaryMin')} (Ce ≥ ${THERAPEUTIC_RANGES[drug].analgesiaMin})` : t('summaryNotReached')}
+                {summaryMetrics.onsetTime !== null
+                  ? `${t('summaryMin')} (Ce ≥ ${summaryMetrics.onsetThreshold})`
+                  : t('summaryNotReached')}
               </div>
             </div>
 
             <div className="bg-white border border-red-200 rounded-lg p-2.5 shadow-sm">
-              <div className="text-[10px] uppercase font-bold text-red-600 tracking-wide">{t('summaryRespRisk')}</div>
+              <div className="text-[10px] uppercase font-bold text-red-600 tracking-wide">
+                {summaryMetrics.isSedative ? 'Deep sedation' : t('summaryRespRisk')}
+              </div>
               <div className="text-xl font-bold text-red-700 font-mono leading-tight">
                 {summaryMetrics.respRiskMin}
               </div>
               <div className="text-[10px] text-slate-500">
-                {t('summaryMin')} (Ce ≥ {THERAPEUTIC_RANGES[drug].respiratoryRisk})
+                {summaryMetrics.respRiskThreshold != null
+                  ? `${t('summaryMin')} (Ce ≥ ${summaryMetrics.respRiskThreshold})`
+                  : '—'}
               </div>
             </div>
 
@@ -1471,12 +1512,17 @@ const App = () => {
                 <div>
                   <label className="text-slate-500 text-xs block mb-1">{t('drug')}</label>
                   <select value={drug} onChange={handleDrugChange} className="w-full border rounded p-2 font-medium bg-emerald-50 text-emerald-900 border-emerald-200">
-                    <option value="Fentanyl">Fentanyl (mcg)</option>
-                    <option value="Remifentanil">Remifentanil (mcg)</option>
-                    <option value="Morphine">Morphine (mg)</option>
-                    <option value="Hydromorphone">Hydromorphone (mg)</option>
-                    <option value="Methadone">Methadone (mg)</option>
-                    <option value="Sufentanil">Sufentanil (mcg)</option>
+                    <optgroup label="Opioids">
+                      <option value="Fentanyl">Fentanyl (mcg)</option>
+                      <option value="Remifentanil">Remifentanil (mcg)</option>
+                      <option value="Morphine">Morphine (mg)</option>
+                      <option value="Hydromorphone">Hydromorphone (mg)</option>
+                      <option value="Methadone">Methadone (mg)</option>
+                      <option value="Sufentanil">Sufentanil (mcg)</option>
+                    </optgroup>
+                    <optgroup label="Sedatives">
+                      <option value="Propofol">Propofol (mg)</option>
+                    </optgroup>
                   </select>
                 </div>
                 <div>
@@ -1509,6 +1555,9 @@ const App = () => {
                     {drug === 'Sufentanil' && <>
                       <option>Gepts (1995) Adult</option>
                       <option>Bartkowska-Sniatkowska (2016) PICU</option>
+                    </>}
+                    {drug === 'Propofol' && <>
+                      <option>Eleveld (2018) General-purpose</option>
                     </>}
                   </select>
                 </div>

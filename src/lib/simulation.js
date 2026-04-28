@@ -1,7 +1,7 @@
 // 3-compartment + effect-site PK simulation engine.
 // Pure function — no React, no DOM. Forward Euler with dt = 10 sec, samples at 1-min intervals.
 
-const MG_DRUGS = ['Morphine', 'Hydromorphone', 'Methadone'];
+const MG_DRUGS = ['Morphine', 'Hydromorphone', 'Methadone', 'Propofol'];
 
 // Convert raw user-facing events (bolus / infusion with duration) into the lower-level event
 // stream the simulator consumes (bolus / infusion_start with rate / infusion_stop with startId).

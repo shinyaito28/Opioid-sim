@@ -5,7 +5,7 @@ const TYPE_BOLUS = 'bolus';
 const TYPE_INFUSION = 'infusion';
 
 // Per-drug bolus stepper increment — mirrors the "round numbers anesthesiologists actually use"
-// (Fent ±25 mcg, Mor ±1 mg, HM ±0.2 mg, Sufenta ±5 mcg, etc.).
+// (Fent ±25 mcg, Mor ±1 mg, HM ±0.2 mg, Sufenta ±5 mcg, Propofol ±10 mg etc.).
 const DRUG_DOSE_STEPS = {
   Fentanyl:      25,
   Remifentanil:  25,
@@ -13,6 +13,7 @@ const DRUG_DOSE_STEPS = {
   Hydromorphone: 0.2,
   Methadone:     0.5,
   Sufentanil:    5,
+  Propofol:      10,
 };
 
 // Helpers (mirrors App.jsx top-level helpers)
