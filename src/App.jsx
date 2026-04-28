@@ -18,7 +18,7 @@ import {
   convertToStandardUnit,
   convertFromStandardUnit,
 } from './lib/drugs';
-import { simulateConcentration } from './lib/simulation';
+import { simulateConcentration, processEvents } from './lib/simulation';
 
 
 /**
@@ -33,11 +33,10 @@ import { simulateConcentration } from './lib/simulation';
 // are all imported, not defined here, so this file stays focused on UI state + handlers.
 
 // Custom Recharts tooltip — keeps default Cp/Ce values, then lists any dosing events at/near the hover time.
-const ChartTooltip = ({ active, payload, label, drug, events, isClockMode, startTime }) => {
+// Multi-drug: each event is labelled with its own drug short name + per-drug unit (read from evt.drug).
+const ChartTooltip = ({ active, payload, label, events, isClockMode, startTime }) => {
   if (!active || !payload || payload.length === 0) return null;
   const time = Number(label);
-  const shortName = DRUG_SHORT_NAMES[drug] || drug;
-  const unit = getDoseUnitForDrug(drug);
   const headerLabel = isClockMode
     ? `${minutesToTime(time, startTime)} (${time} min)`
     : `${time} min`;
@@ -63,11 +62,14 @@ const ChartTooltip = ({ active, payload, label, drug, events, isClockMode, start
       {nearbyEvents.length > 0 && (
         <div className="mt-1.5 pt-1.5 border-t border-slate-200 space-y-0.5">
           {nearbyEvents.map((e) => {
+            const evtDrug = e.drug || 'Fentanyl';
+            const evtShort = DRUG_SHORT_NAMES[evtDrug] || evtDrug;
+            const evtUnit = getDoseUnitForDrug(evtDrug);
             const evtTimeLabel = isClockMode ? minutesToTime(e.time, startTime) : `${e.time}min`;
             if (e.type === 'bolus') {
               return (
                 <div key={e.id} className="text-[10px] text-purple-700">
-                  <span className="font-bold">▼</span> {shortName} {e.amount}{unit} @{evtTimeLabel}
+                  <span className="font-bold">▼</span> {evtShort} {e.amount}{evtUnit} @{evtTimeLabel}
                 </div>
               );
             }
@@ -77,7 +79,7 @@ const ChartTooltip = ({ active, payload, label, drug, events, isClockMode, start
             const durLabel = e.isInfinite ? '∞' : `${e.duration}min`;
             return (
               <div key={e.id} className="text-[10px] text-orange-700">
-                <span className="font-bold">▶</span> {shortName} {rateText} ({durLabel})
+                <span className="font-bold">▶</span> {evtShort} {rateText} ({durLabel})
               </div>
             );
           })}
@@ -201,8 +203,10 @@ const App = () => {
   });
   const [autoFillStats, setAutoFillStats] = useState(true);
 
+  // Phase 5-C: drug is now the *editor* drug (QuickEntry's selected drug); events can mix drugs.
   const [drug, setDrug] = useState('Fentanyl');
-  const [model, setModel] = useState('Bae (2020) Adult');
+  // Per-drug PK model selection — replaces the old single `model`. UI reads modelByDrug[drug].
+  const [modelByDrug, setModelByDrug] = useState({});
 
   const [bolusAmount, setBolusAmount] = useState(CLINICAL_DEFAULTS['Fentanyl'].bolus);
   const [bolusTime, setBolusTime] = useState(0);
@@ -216,9 +220,6 @@ const App = () => {
 
   const [simDuration, setSimDuration] = useState(120);
   const [maxTimeScale, setMaxTimeScale] = useState(720);
-
-  const [simData, setSimData] = useState([]);
-  const [parameters, setParameters] = useState(null);
 
   const [savedTraces, setSavedTraces] = useState([]);
   const [savedScenarios, setSavedScenarios] = useState([]); // SAVE/RESTORE FEATURE
@@ -243,9 +244,24 @@ const App = () => {
       try {
         const parsed = JSON.parse(savedData);
         if (parsed.patient) setPatient(parsed.patient);
-        if (parsed.drug) setDrug(parsed.drug); // Note: setDrug here won't trigger the cleared events because we removed that useEffect
-        if (parsed.model) setModel(parsed.model);
-        if (parsed.events) setEvents(parsed.events);
+        if (parsed.drug) setDrug(parsed.drug);
+
+        // Phase 5-C migration: pre-v2 saves had a single `model` string and untagged events.
+        // Convert to per-drug map and stamp every legacy event with the saved drug.
+        if (parsed.modelByDrug) {
+          setModelByDrug(parsed.modelByDrug);
+        } else if (parsed.model && parsed.drug) {
+          setModelByDrug({ [parsed.drug]: parsed.model });
+        }
+
+        if (parsed.events) {
+          const legacyDrug = parsed.drug || 'Fentanyl';
+          const migrated = parsed.schemaVersion >= 2
+            ? parsed.events
+            : parsed.events.map((e) => ({ ...e, drug: e.drug || legacyDrug }));
+          setEvents(migrated);
+        }
+
         if (parsed.simDuration) setSimDuration(parsed.simDuration);
         if (parsed.savedTraces) setSavedTraces(parsed.savedTraces);
         if (parsed.savedScenarios) setSavedScenarios(parsed.savedScenarios);
@@ -261,9 +277,10 @@ const App = () => {
   // --- PERSISTENCE: SAVE ---
   useEffect(() => {
     const dataToSave = {
+      schemaVersion: 2,
       patient,
       drug,
-      model,
+      modelByDrug,
       events,
       simDuration,
       savedTraces,
@@ -273,9 +290,66 @@ const App = () => {
       simSettings: { startTime }
     };
     localStorage.setItem('opioid_sim_data', JSON.stringify(dataToSave));
-  }, [patient, drug, model, events, simDuration, savedTraces, savedScenarios, lastDoseByDrug, isClockMode, startTime]);
+  }, [patient, drug, modelByDrug, events, simDuration, savedTraces, savedScenarios, lastDoseByDrug, isClockMode, startTime]);
 
   const [editingId, setEditingId] = useState(null);
+
+  // Phase 5-C derived state — multi-drug simulation hub.
+  // activeDrugs: union of every drug currently represented by an event. Drives chart line iteration.
+  const activeDrugs = useMemo(
+    () => new Set(events.map((e) => e.drug || drug)),
+    [events, drug]
+  );
+
+  // model & setModel are derived shims so existing detail-form code (which mutates a single
+  // string) continues to operate on modelByDrug[drug] under the hood.
+  const model = modelByDrug[drug] || getBestModel(drug, patient.age);
+  const setModel = (next) => setModelByDrug((prev) => ({ ...prev, [drug]: next }));
+
+  // Per-drug 3-comp + Ce simulation. Includes the editor drug so the model-params display + summary
+  // metrics work even before any event is added.
+  const simByDrug = useMemo(() => {
+    const result = new Map();
+    const drugsToSim = new Set(activeDrugs);
+    drugsToSim.add(drug);
+    for (const d of drugsToSim) {
+      const drugEvents = events.filter((e) => (e.drug || drug) === d);
+      const drugModel = modelByDrug[d] || getBestModel(d, patient.age);
+      const params = getPKParameters(d, drugModel, patient);
+      const proc = processEvents(drugEvents, simDuration);
+      const sim = simulateConcentration(proc, params, simDuration, d);
+      result.set(d, sim);
+    }
+    return result;
+  }, [events, modelByDrug, patient, simDuration, drug, activeDrugs]);
+
+  // Backwards-compat aliases — many existing useMemos / chart props read these names.
+  const parameters = useMemo(
+    () => getPKParameters(drug, model, patient),
+    [drug, model, patient]
+  );
+  const simData = simByDrug.get(drug) || [];
+
+  // Combined Opioid Burden Index = Σ (Ce_drug(t) / RespC50_drug). >1.0 ⇒ warn.
+  // Sum is only over activeDrugs (events present); empty when no events are scheduled.
+  const burdenSeries = useMemo(() => {
+    if (activeDrugs.size === 0) return [];
+    const len = simDuration + 1;
+    const result = [];
+    for (let t = 0; t < len; t++) {
+      let burden = 0;
+      for (const d of activeDrugs) {
+        const sim = simByDrug.get(d);
+        const point = sim?.[t];
+        if (!point) continue;
+        const respRisk = THERAPEUTIC_RANGES[d]?.respiratoryRisk;
+        if (!respRisk) continue;
+        burden += (point.ce || 0) / respRisk;
+      }
+      result.push({ time: t, burden: parseFloat(burden.toFixed(3)) });
+    }
+    return result;
+  }, [simByDrug, activeDrugs, simDuration]);
 
   const activeParams = useMemo(() => getModelRequirements(drug, model), [drug, model]);
 
@@ -425,53 +499,25 @@ const App = () => {
   // MOVED DRUG DEFAULT LOGIC TO handleDrugChange TO ENABLE PERSISTENCE
 
 
-  // --- EFFECT: Run Simulation ---
-  useEffect(() => {
-    const params = getPKParameters(drug, model, patient);
-    setParameters(params);
-
-    let processedEvents = [];
-    events.forEach(evt => {
-      if (evt.type === 'bolus') {
-        processedEvents.push(evt);
-      } else if (evt.type === 'infusion') {
-        processedEvents.push({ ...evt, type: 'infusion_start' });
-
-        // Calculate effective duration (extend if infinite)
-        let effectiveDuration = evt.duration;
-        if (evt.isInfinite) {
-          effectiveDuration = Math.max(0, simDuration - evt.time + 60);
-        }
-
-        processedEvents.push({
-          type: 'infusion_stop',
-          time: evt.time + effectiveDuration,
-          rate: 0
-        });
-      }
-    });
-
-    const data = simulateConcentration(processedEvents, params, simDuration, drug);
-    setSimData(data);
-  }, [patient, drug, model, events, simDuration]);
-
-  // --- CALCULATE AUTO Y MAX ---
-  // --- CALCULATE AUTO Y MAX ---
+  // --- CALCULATE AUTO Y MAX (across all active drugs) ---
   const calculatedYMax = useMemo(() => {
     if (!isAutoY) return yAxisMax;
     let maxCe = 0;
-    if (simData.length > 0) {
-      maxCe = Math.max(...simData.map(d => d.ce));
+    for (const sim of simByDrug.values()) {
+      if (sim.length > 0) {
+        const m = Math.max(...sim.map((d) => d.ce));
+        if (m > maxCe) maxCe = m;
+      }
     }
-    savedTraces.forEach(trace => {
+    savedTraces.forEach((trace) => {
       if (trace.data && trace.data.length > 0) {
-        const traceMax = Math.max(...trace.data.map(d => d.ce));
+        const traceMax = Math.max(...trace.data.map((d) => d.ce));
         if (traceMax > maxCe) maxCe = traceMax;
       }
     });
     if (maxCe <= 0) return 5;
     return Math.ceil(maxCe * 1.2);
-  }, [isAutoY, yAxisMax, simData, savedTraces]);
+  }, [isAutoY, yAxisMax, simByDrug, savedTraces]);
 
 
   // --- HANDLERS ---
@@ -499,7 +545,7 @@ const App = () => {
       newTime = 0; // The new event is now at 0
     }
 
-    setEvents([...currentEvents, { id: Date.now(), type: 'bolus', time: newTime, amount: parseFloat(bolusAmount) }]);
+    setEvents([...currentEvents, { id: Date.now(), drug, type: 'bolus', time: newTime, amount: parseFloat(bolusAmount) }]);
     setEditingId(null);
   };
 
@@ -531,6 +577,7 @@ const App = () => {
 
     setEvents([...currentEvents, {
       id: Date.now(),
+      drug,
       type: 'infusion',
       time: newStartTime,
       rate: standardRate,
@@ -563,7 +610,7 @@ const App = () => {
       newTime = 0;
     }
 
-    setEvents([...currentEvents, { id: Date.now(), type: 'bolus', time: newTime, amount: amountVal }]);
+    setEvents([...currentEvents, { id: Date.now(), drug: drugArg, type: 'bolus', time: newTime, amount: amountVal }]);
     setLastDoseByDrug((prev) => ({ ...prev, [drugArg]: { ...prev[drugArg], bolusAmount: amountVal } }));
     setEditingId(null);
   };
@@ -591,6 +638,7 @@ const App = () => {
       ...currentEvents,
       {
         id: Date.now(),
+        drug: drugArg,
         type: 'infusion',
         time: newStartTime,
         rate: standardRate,
@@ -613,16 +661,12 @@ const App = () => {
     setEditingId(null);
   };
 
-  const handleDrugChange = (e) => {
-    const newDrug = e.target.value;
+  // Phase 5-C: drug switch is now non-destructive — events stay because they're tagged per-drug,
+  // and savedTraces from other drugs are no longer dropped. We only reset the detail-edit form's
+  // defaults so it makes sense for the newly selected drug.
+  const handleDrugChange = (eOrStr) => {
+    const newDrug = typeof eOrStr === 'string' ? eOrStr : eOrStr.target.value;
     if (newDrug === drug) return;
-
-    if (events.length > 0) {
-      if (!window.confirm(t('confirmDrugSwitch'))) {
-        e.target.value = drug;
-        return;
-      }
-    }
 
     setDrug(newDrug);
 
@@ -651,13 +695,16 @@ const App = () => {
       setInfusionUnit(defaultUnit);
     }
     setIsAutoY(true);
-    setEvents([]);
     setEditingId(null);
-    setSavedTraces(prev => prev.filter(t => t.drug === newDrug));
   };
 
   const editEvent = (evt) => {
-    const remainingEvents = events.filter(e => e.id !== evt.id);
+    // If this event belongs to a different drug, switch the editor to it (non-destructively —
+    // we don't run handleDrugChange so the form-defaults reset doesn't clobber evt.amount).
+    const evtDrug = evt.drug || drug;
+    if (evtDrug !== drug) setDrug(evtDrug);
+
+    const remainingEvents = events.filter((e) => e.id !== evt.id);
     setEvents(remainingEvents);
 
     if (evt.type === 'bolus') {
@@ -665,16 +712,12 @@ const App = () => {
       setBolusTime(evt.time);
       setEditingId('bolus');
     } else {
-      // Try to use original values if available, otherwise just use the rate (which is standardized)
-      // If we don't have originalUnit, we might display standardized rate in default unit?
-      // Simple approach: if original exists, use it. If not, assumes standard unit.
-      if (evt.originalRate && evt.originalUnit && DRUG_UNITS[drug].includes(evt.originalUnit)) {
+      const drugForUnit = evtDrug;
+      if (evt.originalRate && evt.originalUnit && DRUG_UNITS[drugForUnit]?.includes(evt.originalUnit)) {
         setInfusionRate(evt.originalRate);
         setInfusionUnit(evt.originalUnit);
       } else {
         setInfusionRate(evt.rate);
-        // Keep current unit or default? Default might be confusing if converted.
-        // If no original info, it means it's an old event or generic.
       }
       setInfusionStartTime(evt.time);
       setInfusionDuration(evt.duration);
@@ -702,23 +745,14 @@ const App = () => {
     const modelsToCompare = AVAILABLE_MODELS[drug];
     const newTraces = [];
 
-    let processedEvents = [];
-    events.forEach(evt => {
-      if (evt.type === 'bolus') {
-        processedEvents.push(evt);
-      } else if (evt.type === 'infusion') {
-        processedEvents.push({ ...evt, type: 'infusion_start' });
-        processedEvents.push({
-          type: 'infusion_stop',
-          time: evt.time + evt.duration,
-          rate: 0
-        });
-      }
-    });
+    // Phase 5-C: filter to current editor drug's events only — multi-drug events shouldn't
+    // appear in a "compare all models for current drug" view.
+    const drugEvents = events.filter((e) => (e.drug || drug) === drug);
+    const proc = processEvents(drugEvents, simDuration);
 
     modelsToCompare.forEach((m, index) => {
       const params = getPKParameters(drug, m, patient);
-      const data = simulateConcentration(processedEvents, params, simDuration, drug);
+      const data = simulateConcentration(proc, params, simDuration, drug);
 
       const colors = ['#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#3b82f6'];
       const color = colors[index % colors.length];
@@ -855,12 +889,13 @@ const App = () => {
     let nextId = Date.now();
     if (preset.bolus) {
       const amount = parseFloat((preset.bolus.perKg * patient.weight).toPrecision(2));
-      newEvents.push({ id: nextId++, type: 'bolus', time: 0, amount });
+      newEvents.push({ id: nextId++, drug: preset.drug, type: 'bolus', time: 0, amount });
     }
     if (preset.infusion) {
       const stdRate = convertToStandardUnit(preset.infusion.rate, preset.infusion.unit, patient.weight, preset.drug);
       newEvents.push({
         id: nextId++,
+        drug: preset.drug,
         type: 'infusion',
         time: 0,
         rate: stdRate,
@@ -923,7 +958,7 @@ const App = () => {
 
         <QuickEntry
           drug={drug}
-          setDrug={setDrug}
+          setDrug={handleDrugChange}
           patient={patient}
           isClockMode={isClockMode}
           startTime={startTime}
@@ -989,18 +1024,29 @@ const App = () => {
                   tickFormatter={(val) => isClockMode ? minutesToTime(val, startTime) : val}
                 />
                 <YAxis
+                  yAxisId="left"
                   label={{ value: t('concLabel'), angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
                   domain={[0, calculatedYMax]}
                   allowDataOverflow={true}
                 />
+                {/* Right Y-axis dedicated to the Combined Opioid Burden (Σ Ce/RespC50). */}
+                {activeDrugs.size > 0 && (
+                  <YAxis
+                    yAxisId="burden"
+                    orientation="right"
+                    domain={[0, 2.5]}
+                    stroke="#475569"
+                    label={{ value: 'Burden', angle: 90, position: 'insideRight', style: { textAnchor: 'middle', fill: '#475569' }, fontSize: 11 }}
+                    width={40}
+                  />
+                )}
                 {isClockMode && currentSimMinutes !== null && currentSimMinutes >= 0 && currentSimMinutes <= simDuration && (
-                  <ReferenceLine x={currentSimMinutes} stroke="#ef4444" strokeDasharray="3 3" />
+                  <ReferenceLine yAxisId="left" x={currentSimMinutes} stroke="#ef4444" strokeDasharray="3 3" />
                 )}
 
                 <Tooltip
                   content={
                     <ChartTooltip
-                      drug={drug}
                       events={events}
                       isClockMode={isClockMode}
                       startTime={startTime}
@@ -1009,34 +1055,39 @@ const App = () => {
                 />
                 <Legend verticalAlign="top" height={36} />
 
-                {/* Therapeutic Windows */}
+                {/* Therapeutic Windows — shown for the current editor drug as a reference frame. */}
                 {showRanges && currentRange && (
                   <>
                     <ReferenceArea
+                      yAxisId="left"
                       y1={currentRange.analgesiaMin}
                       y2={currentRange.analgesiaMax}
                       fill="#4ade80"
                       fillOpacity={0.15}
                     />
                     <ReferenceLine
+                      yAxisId="left"
                       y={currentRange.analgesiaMax}
                       stroke="#16a34a"
                       strokeDasharray="3 3"
                       label={{ value: t('analgesiaMax'), position: 'insideTopRight', fill: '#166534', fontSize: 10 }}
                     />
                     <ReferenceLine
+                      yAxisId="left"
                       y={currentRange.analgesiaMin}
                       stroke="#16a34a"
                       strokeDasharray="3 3"
                       label={{ value: t('analgesiaMin'), position: 'insideBottomRight', fill: '#166534', fontSize: 10 }}
                     />
                     <ReferenceArea
+                      yAxisId="left"
                       y1={currentRange.respiratoryRisk}
                       y2={9999}
                       fill="#ef4444"
                       fillOpacity={0.05}
                     />
                     <ReferenceLine
+                      yAxisId="left"
                       y={currentRange.respiratoryRisk}
                       stroke="#ef4444"
                       strokeWidth={1.5}
@@ -1046,22 +1097,26 @@ const App = () => {
                   </>
                 )}
 
-                {/* DOSING EVENT MARKERS */}
+                {/* DOSING EVENT MARKERS — coloured by the event's drug */}
                 {events.flatMap((evt) => {
-                  const shortName = DRUG_SHORT_NAMES[drug] || drug;
+                  const evtDrug = evt.drug || drug;
+                  const shortName = DRUG_SHORT_NAMES[evtDrug] || evtDrug;
+                  const colors = DRUG_COLORS[evtDrug] || { ce: '#a855f7', cp: '#fed7aa' };
+                  const evtUnit = getDoseUnitForDrug(evtDrug);
                   if (evt.type === 'bolus') {
-                    const bolusText = `${shortName} ${evt.amount}${getDoseUnit()}`;
+                    const bolusText = `${shortName} ${evt.amount}${evtUnit}`;
                     return [
                       <ReferenceLine
                         key={`evt-bolus-${evt.id}`}
+                        yAxisId="left"
                         x={evt.time}
-                        stroke="#a855f7"
+                        stroke={colors.ce}
                         strokeWidth={1.5}
                         strokeDasharray="2 3"
                         ifOverflow="extendDomain"
                       >
-                        <Label value="▼" position="top" fill="#7e22ce" fontSize={13} fontWeight="bold" offset={2} />
-                        <Label value={bolusText} position="insideTopLeft" fill="#7e22ce" fontSize={11} fontWeight="bold" offset={4} />
+                        <Label value="▼" position="top" fill={colors.ce} fontSize={13} fontWeight="bold" offset={2} />
+                        <Label value={bolusText} position="insideTopLeft" fill={colors.ce} fontSize={11} fontWeight="bold" offset={4} />
                       </ReferenceLine>
                     ];
                   }
@@ -1074,32 +1129,35 @@ const App = () => {
                     return [
                       <ReferenceArea
                         key={`evt-inf-area-${evt.id}`}
+                        yAxisId="left"
                         x1={evt.time}
                         x2={endTime}
-                        fill="#fed7aa"
-                        fillOpacity={0.07}
+                        fill={colors.cp}
+                        fillOpacity={0.18}
                         ifOverflow="hidden"
                       />,
                       <ReferenceLine
                         key={`evt-inf-start-${evt.id}`}
+                        yAxisId="left"
                         x={evt.time}
-                        stroke="#fb923c"
+                        stroke={colors.ce}
                         strokeWidth={1.5}
                         strokeDasharray="3 2"
                         ifOverflow="extendDomain"
                       >
-                        <Label value={inflText} position="insideTopLeft" fill="#c2410c" fontSize={10} fontWeight="bold" offset={4} dy={18} />
+                        <Label value={inflText} position="insideTopLeft" fill={colors.ce} fontSize={10} fontWeight="bold" offset={4} dy={18} />
                       </ReferenceLine>,
                       !evt.isInfinite && (
                         <ReferenceLine
                           key={`evt-inf-end-${evt.id}`}
+                          yAxisId="left"
                           x={endTime}
-                          stroke="#fb923c"
+                          stroke={colors.ce}
                           strokeWidth={1}
                           strokeDasharray="3 2"
                           ifOverflow="hidden"
                         >
-                          <Label value="◀" position="insideTopRight" fill="#c2410c" fontSize={11} offset={4} dy={18} />
+                          <Label value="◀" position="insideTopRight" fill={colors.ce} fontSize={11} offset={4} dy={18} />
                         </ReferenceLine>
                       )
                     ].filter(Boolean);
@@ -1107,10 +1165,11 @@ const App = () => {
                   return [];
                 })}
 
-                {/* SAVED TRACES */}
+                {/* SAVED TRACES — comparison overlays from "Add to Compare" / Compare All */}
                 {savedTraces.map((trace) => (
                   <Line
                     key={trace.id}
+                    yAxisId="left"
                     data={trace.data}
                     type="monotone"
                     dataKey="ce"
@@ -1123,28 +1182,66 @@ const App = () => {
                   />
                 ))}
 
-                {/* CURRENT SIMULATION */}
-                <Line
-                  data={simData}
-                  type="monotone"
-                  dataKey="cp"
-                  name={`Cp (${drug})`}
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  strokeOpacity={0.6}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-                <Line
-                  data={simData}
-                  type="monotone"
-                  dataKey="ce"
-                  name={`Ce (${drug})`}
-                  stroke="#ec4899"
-                  strokeWidth={3}
-                  dot={false}
-                  isAnimationActive={false}
-                />
+                {/* CURRENT SIMULATION — one Cp + Ce pair per active drug, drug-coloured */}
+                {[...activeDrugs].flatMap((d) => {
+                  const sim = simByDrug.get(d);
+                  if (!sim || sim.length === 0) return [];
+                  const colors = DRUG_COLORS[d] || { ce: '#ec4899', cp: '#3b82f6' };
+                  const shortName = DRUG_SHORT_NAMES[d] || d;
+                  return [
+                    <Line
+                      key={`cp-${d}`}
+                      yAxisId="left"
+                      data={sim}
+                      type="monotone"
+                      dataKey="cp"
+                      name={`Cp ${shortName}`}
+                      stroke={colors.cp}
+                      strokeWidth={2}
+                      strokeOpacity={0.6}
+                      strokeDasharray="4 2"
+                      dot={false}
+                      isAnimationActive={false}
+                    />,
+                    <Line
+                      key={`ce-${d}`}
+                      yAxisId="left"
+                      data={sim}
+                      type="monotone"
+                      dataKey="ce"
+                      name={`Ce ${shortName}`}
+                      stroke={colors.ce}
+                      strokeWidth={3}
+                      dot={false}
+                      isAnimationActive={false}
+                    />,
+                  ];
+                })}
+
+                {/* COMBINED OPIOID BURDEN — Σ Ce/RespC50 across active drugs; threshold 1.0 */}
+                {activeDrugs.size > 0 && (
+                  <>
+                    <ReferenceLine
+                      yAxisId="burden"
+                      y={1.0}
+                      stroke="#dc2626"
+                      strokeDasharray="2 2"
+                      label={{ value: 'Burden=1.0', position: 'right', fill: '#dc2626', fontSize: 10 }}
+                    />
+                    <Line
+                      yAxisId="burden"
+                      data={burdenSeries}
+                      type="monotone"
+                      dataKey="burden"
+                      name="Opioid Burden"
+                      stroke="#475569"
+                      strokeWidth={2.5}
+                      strokeDasharray="4 4"
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  </>
+                )}
 
               </LineChart>
             </ResponsiveContainer>

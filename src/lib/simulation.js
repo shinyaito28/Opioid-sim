@@ -1,10 +1,32 @@
 // 3-compartment + effect-site PK simulation engine.
 // Pure function — no React, no DOM. Forward Euler with dt = 10 sec, samples at 1-min intervals.
-// Phase 5-C will replace the single-scalar `currentInfusionRate` with a Map<infusionId, rate>
-// so concurrent infusions of the same drug sum correctly (current implementation has a known bug:
-// a second infusion_start overwrites the first, and any infusion_stop zeroes them all).
 
 const MG_DRUGS = ['Morphine', 'Hydromorphone', 'Methadone'];
+
+// Convert raw user-facing events (bolus / infusion with duration) into the lower-level event
+// stream the simulator consumes (bolus / infusion_start with rate / infusion_stop with startId).
+// `startId` lets concurrent infusions of the same drug be tracked individually so a stop event
+// only removes its own infusion's contribution to the running rate (Phase 5-C bugfix).
+export const processEvents = (drugEvents, simDuration) => {
+  const out = [];
+  drugEvents.forEach((evt) => {
+    if (evt.type === 'bolus') {
+      out.push(evt);
+    } else if (evt.type === 'infusion') {
+      out.push({ ...evt, type: 'infusion_start' });
+      const effectiveDuration = evt.isInfinite
+        ? Math.max(0, simDuration - evt.time + 60)
+        : evt.duration;
+      out.push({
+        type: 'infusion_stop',
+        time: evt.time + effectiveDuration,
+        startId: evt.id,
+        rate: 0,
+      });
+    }
+  });
+  return out;
+};
 
 export const simulateConcentration = (events, params, durationMinutes, drugType) => {
   const { V1, V2, V3, Cl, Q2, Q3, ke0 } = params;
@@ -27,7 +49,9 @@ export const simulateConcentration = (events, params, durationMinutes, drugType)
 
   const eventQueue = [...events].sort((a, b) => a.time - b.time);
   let eventIndex = 0;
-  let currentInfusionRate = 0;
+  // Per-infusion-id rate map (Phase 5-C concurrent-infusion bug fix). Sum the active values
+  // each step so two parallel infusions of the same drug accumulate correctly.
+  const activeInfusions = new Map();
 
   const totalSteps = Math.floor(durationMinutes / dt);
   const stepsPerMin = Math.round(1 / dt);
@@ -41,13 +65,16 @@ export const simulateConcentration = (events, params, durationMinutes, drugType)
       if (evt.type === 'bolus') {
         x1 += evt.amount * scaleFactor;
       } else if (evt.type === 'infusion_start') {
-        currentInfusionRate = (evt.rate * scaleFactor) / 60;
+        activeInfusions.set(evt.id, (evt.rate * scaleFactor) / 60);
       } else if (evt.type === 'infusion_stop') {
-        currentInfusionRate = 0;
+        activeInfusions.delete(evt.startId);
       }
 
       eventIndex++;
     }
+
+    let currentInfusionRate = 0;
+    for (const r of activeInfusions.values()) currentInfusionRate += r;
 
     const dx1 = (currentInfusionRate - (k10 + k12 + k13) * x1 + k21 * x2 + k31 * x3) * dt;
     const dx2 = (k12 * x1 - k21 * x2) * dt;
