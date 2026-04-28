@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea, Label } from 'recharts';
 import { Syringe, Clock, Settings, User, Activity, Plus, Trash2, Save, X, Eye, EyeOff, ZoomIn, Baby, Edit2, AlertCircle, Wand2, Info, FileText, Layers, FolderOpen, Download, MousePointerClick } from 'lucide-react';
+import TopBar from './components/TopBar';
 
 
 /**
@@ -1197,49 +1198,20 @@ const App = () => {
       style={{ paddingBottom: 'max(5rem, env(safe-area-inset-bottom))' }}
     >
 
-      {/* Header */}
-      <header
-        className="bg-slate-800 text-white shadow-md sticky top-0 z-20"
-        style={{
-          paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
-          paddingBottom: '0.75rem',
-          paddingLeft: 'max(0.75rem, env(safe-area-inset-left))',
-          paddingRight: 'max(0.75rem, env(safe-area-inset-right))',
-        }}
-      >
-        <div className="max-w-5xl mx-auto flex flex-wrap justify-between items-center gap-2">
-          <div className="flex items-center gap-2">
-            <Activity className="h-5 w-5 text-blue-400" />
-            <h1 className="text-base sm:text-lg font-bold">{t('appTitle')}</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex bg-slate-700 rounded p-1 gap-1">
-              <button
-                onClick={() => i18n.changeLanguage('en')}
-                className={`px-2 py-0.5 text-xs rounded ${i18n.language === 'en' ? 'bg-blue-500 text-white' : 'text-slate-300 hover:bg-slate-600'}`}
-              >
-                EN
-              </button>
-              <button
-                onClick={() => i18n.changeLanguage('ja')}
-                className={`px-2 py-0.5 text-xs rounded ${i18n.language === 'ja' ? 'bg-blue-500 text-white' : 'text-slate-300 hover:bg-slate-600'}`}
-              >
-                JP
-              </button>
-            </div>
-            <button
-              onClick={() => setShowRanges(!showRanges)}
-              className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded flex items-center gap-1"
-            >
-              {showRanges ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-              <span className="hidden sm:inline">{t('ranges')}</span>
-            </button>
-            <div className="text-xs bg-red-900/50 text-red-200 px-2 py-1 rounded border border-red-800 hidden sm:block">
-              {t('forResearchOnly')}
-            </div>
-          </div>
-        </div>
-      </header>
+      <TopBar
+        t={t}
+        i18n={i18n}
+        showRanges={showRanges}
+        setShowRanges={setShowRanges}
+        patient={patient}
+        setPatient={setPatient}
+        autoFillStats={autoFillStats}
+        setAutoFillStats={setAutoFillStats}
+        savedScenarios={savedScenarios}
+        saveScenario={saveScenario}
+        loadScenario={loadScenario}
+        deleteScenario={deleteScenario}
+      />
 
       <main
         className="max-w-5xl mx-auto space-y-4 py-3"
@@ -1266,14 +1238,6 @@ const App = () => {
               >
                 <Save className="w-4 h-4" />
                 {t('addToCompare')}
-              </button>
-              <button
-                onClick={saveScenario}
-                className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded shadow hover:bg-indigo-700 text-sm transition-colors"
-                title={t('saveScenarioTooltip')}
-              >
-                <FolderOpen className="w-4 h-4" />
-                {t('saveCase')}
               </button>
               <button
                 onClick={compareAllModels}
@@ -1755,81 +1719,6 @@ const App = () => {
               </div>
             </div>
 
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-              <div className="flex justify-between items-center mb-3 border-b pb-2">
-                <div className="flex items-center gap-2 text-slate-700">
-                  <User className="h-4 w-4" />
-                  <h3 className="font-bold text-sm">{t('patientSettings')}</h3>
-                </div>
-                {/* Auto-fill Toggle */}
-                <label className="flex items-center gap-1 text-[10px] text-blue-600 cursor-pointer bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 transition">
-                  <Wand2 className="w-3 h-3" />
-                  <input
-                    type="checkbox"
-                    checked={autoFillStats}
-                    onChange={(e) => setAutoFillStats(e.target.checked)}
-                    className="accent-blue-600 w-3 h-3"
-                  />
-                  <span>{t('autoAdjust')}</span>
-                </label>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {/* Age Field (Always active in UI generally, though functionally Minto uses it) */}
-                <div>
-                  <label className={`text-xs flex justify-between ${getLabelStyle('age')}`}>
-                    <span>{t('age')}</span>
-                  </label>
-                  <input type="number" min="0" value={patient.age}
-                    onChange={e => setPatient({ ...patient, age: Math.max(0, Number(e.target.value)) })}
-                    className={`w-full border rounded p-1.5 ${getFieldStyle('age')}`}
-                  />
-                </div>
-
-                {/* Gender Field */}
-                <div>
-                  <label className={`text-xs flex justify-between ${getLabelStyle('gender')}`}>
-                    <span>{t('gender')}</span>
-                  </label>
-                  <select value={patient.gender}
-                    onChange={e => setPatient({ ...patient, gender: e.target.value })}
-                    className={`w-full border rounded p-1.5 ${getFieldStyle('gender')}`}
-                  >
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                  </select>
-                </div>
-
-                {/* Weight Field */}
-                <div>
-                  <label className={`text-xs flex justify-between ${getLabelStyle('weight')}`}>
-                    <span>{t('weight')}</span>
-                    {autoFillStats && <span className="text-[9px] opacity-50">Auto</span>}
-                  </label>
-                  <input type="number" min="0" value={patient.weight}
-                    onChange={e => setPatient({ ...patient, weight: Math.max(0, Number(e.target.value)) })}
-                    className={`w-full border rounded p-1.5 ${getFieldStyle('weight')}`}
-                  />
-                </div>
-
-                {/* Height Field */}
-                <div>
-                  <label className={`text-xs flex justify-between ${getLabelStyle('height')}`}>
-                    <span>{t('height')}</span>
-                    {autoFillStats && <span className="text-[9px] opacity-50">Auto</span>}
-                  </label>
-                  <input type="number" min="0" value={patient.height}
-                    onChange={e => setPatient({ ...patient, height: Math.max(0, Number(e.target.value)) })}
-                    className={`w-full border rounded p-1.5 ${getFieldStyle('height')}`}
-                  />
-                </div>
-              </div>
-
-              <div className="mt-2 flex items-start gap-1 text-[10px] text-slate-400">
-                <Info className="w-3 h-3 mt-0.5" />
-                <span>{t('modelParamsNote')}</span>
-              </div>
-            </div>
           </div >
 
           {/* Right Column: Dosing & History (8 cols) */}
@@ -1995,46 +1884,6 @@ const App = () => {
                 ))}
               </div>
             </div >
-
-            {/* Saved Scenarios List */}
-            {savedScenarios.length > 0 && (
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="bg-indigo-50 p-2 px-4 border-b border-indigo-100 flex justify-between items-center text-indigo-800">
-                  <h3 className="font-bold text-sm flex items-center gap-2">
-                    <FolderOpen className="w-4 h-4" />
-                    {t('savedCases')}
-                  </h3>
-                  <span className="text-xs">{savedScenarios.length} items</span>
-                </div>
-                <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
-                  {savedScenarios.map(s => (
-                    <div key={s.id} className="p-2 px-4 flex justify-between items-center text-sm hover:bg-slate-50 group">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-slate-700">{s.name}</span>
-                        <span className="text-xs text-slate-400">
-                          {s.data.events.length} events • {s.data.model}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => loadScenario(s)}
-                          className="flex items-center gap-1 bg-white border border-indigo-200 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-50 text-xs"
-                        >
-                          <Download className="w-3 h-3" />
-                          {t('load')}
-                        </button>
-                        <button
-                          onClick={() => deleteScenario(s.id)}
-                          className="text-slate-300 hover:text-red-500 p-1.5"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
           </div >
         </div >
