@@ -126,18 +126,24 @@ export default function SedationChart({
       </div>
       <div className="h-[160px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={displaySim} margin={{ top: 4, right: 10, left: 0, bottom: 4 }}>
+          {/* margin + axis widths intentionally match the main chart so the X axis
+              left/right edges line up across both — left YAxis default width (~60),
+              right spacer width=40 mirrors the main chart's Burden axis. */}
+          <LineChart data={displaySim} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
             <XAxis
               dataKey="time"
               type="number"
               domain={[0, simDuration]}
-              tickCount={8}
+              tickCount={10}
               allowDataOverflow
               tickFormatter={(val) => isClockMode ? minutesToTime(val, startTime) : val}
               fontSize={10}
             />
-            <YAxis domain={[0, 'auto']} fontSize={10} width={36} />
+            <YAxis yAxisId="left" domain={[0, 'auto']} fontSize={10} />
+            {/* Invisible right-side YAxis — reserves the same 40px slot the main
+                chart's Burden axis occupies, keeping X edges aligned. */}
+            <YAxis yAxisId="burden-spacer" orientation="right" width={40} hide />
             <Tooltip
               content={
                 <SedationTooltip
@@ -152,6 +158,7 @@ export default function SedationChart({
 
             {targetBand && (
               <ReferenceArea
+                yAxisId="left"
                 y1={targetBand.min}
                 y2={targetBand.max}
                 fill={colors.ce}
@@ -166,6 +173,7 @@ export default function SedationChart({
                 return [
                   <ReferenceLine
                     key={`evt-bolus-${evt.id}`}
+                    yAxisId="left"
                     x={evt.time}
                     stroke={colors.ce}
                     strokeWidth={1.2}
@@ -186,6 +194,7 @@ export default function SedationChart({
                 return [
                   <ReferenceArea
                     key={`evt-inf-area-${evt.id}`}
+                    yAxisId="left"
                     x1={evt.time}
                     x2={endTime}
                     fill={colors.cp}
@@ -194,6 +203,7 @@ export default function SedationChart({
                   />,
                   <ReferenceLine
                     key={`evt-inf-start-${evt.id}`}
+                    yAxisId="left"
                     x={evt.time}
                     stroke={colors.ce}
                     strokeWidth={1.2}
@@ -205,6 +215,7 @@ export default function SedationChart({
                   !evt.isInfinite && (
                     <ReferenceLine
                       key={`evt-inf-end-${evt.id}`}
+                      yAxisId="left"
                       x={endTime}
                       stroke={colors.ce}
                       strokeWidth={1}
@@ -220,6 +231,7 @@ export default function SedationChart({
             })}
 
             <Line
+              yAxisId="left"
               type="monotone"
               dataKey="cp"
               name={`Cp ${shortName}`}
@@ -230,6 +242,7 @@ export default function SedationChart({
               isAnimationActive={false}
             />
             <Line
+              yAxisId="left"
               type="monotone"
               dataKey="ce"
               name={`Ce ${shortName}`}
@@ -240,7 +253,7 @@ export default function SedationChart({
             />
 
             {isClockMode && currentSimMinutes != null && currentSimMinutes >= 0 && currentSimMinutes <= simDuration && (
-              <ReferenceLine x={currentSimMinutes} stroke="#ef4444" strokeDasharray="3 3" />
+              <ReferenceLine yAxisId="left" x={currentSimMinutes} stroke="#ef4444" strokeDasharray="3 3" />
             )}
           </LineChart>
         </ResponsiveContainer>
