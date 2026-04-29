@@ -118,12 +118,9 @@ export default function SedationChart({
 
   return (
     <div className="glass rounded-xl p-3 border border-slate-200/60 shadow-sm">
-      <div className="flex items-center justify-between mb-1">
-        <h4 className="text-xs font-semibold text-slate-700">
-          {shortName} — {t('sedationMonitor')}
-        </h4>
-        <span className="text-[10px] text-slate-500 font-mono">{displayUnit}</span>
-      </div>
+      <h4 className="text-xs font-semibold text-slate-700 mb-1">
+        {shortName} — {t('sedationMonitor')}
+      </h4>
       <div className="h-[160px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           {/* margin + axis widths intentionally match the main chart so the X axis
@@ -140,7 +137,12 @@ export default function SedationChart({
               tickFormatter={(val) => isClockMode ? minutesToTime(val, startTime) : val}
               fontSize={10}
             />
-            <YAxis yAxisId="left" domain={[0, 'auto']} fontSize={10} />
+            <YAxis
+              yAxisId="left"
+              domain={[0, 'auto']}
+              label={{ value: `Conc (${displayUnit})`, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+              fontSize={10}
+            />
             {/* Invisible right-side YAxis — reserves the same 40px slot the main
                 chart's Burden axis occupies, keeping X edges aligned. */}
             <YAxis yAxisId="burden-spacer" orientation="right" width={40} hide />
