@@ -5,6 +5,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { Syringe, Clock, Settings, User, Activity, Plus, Trash2, Save, X, Eye, EyeOff, ZoomIn, Baby, Edit2, AlertCircle, Wand2, Info, FileText, Layers, FolderOpen, Download, MousePointerClick } from 'lucide-react';
 import TopBar from './components/TopBar';
 import QuickEntry from './components/QuickEntry';
+import SedationChart from './components/SedationChart';
 import {
   THERAPEUTIC_RANGES,
   DRUG_UNITS,
@@ -304,6 +305,18 @@ const App = () => {
   const activeDrugs = useMemo(
     () => new Set(events.map((e) => e.drug || drug)),
     [events, drug]
+  );
+
+  // Phase 5-G-2-a: split activeDrugs by class.
+  // activeOpioids → main chart Cp/Ce lines + Burden Index.
+  // activeSedatives → SedationChart rows below; section is omitted entirely when empty.
+  const activeOpioids = useMemo(
+    () => [...activeDrugs].filter((d) => DRUG_CLASS[d] !== 'sedative'),
+    [activeDrugs]
+  );
+  const activeSedatives = useMemo(
+    () => [...activeDrugs].filter((d) => DRUG_CLASS[d] === 'sedative'),
+    [activeDrugs]
   );
 
   // model & setModel are derived shims so existing detail-form code (which mutates a single
@@ -1206,11 +1219,10 @@ const App = () => {
                   />
                 ))}
 
-                {/* CURRENT SIMULATION — one Cp + Ce pair per active drug, drug-coloured.
-                    Sedatives (Propofol) are scaled from internal ng/mL to display mcg/mL via
-                    DRUG_DISPLAY[d].divisor so opioids and sedatives can share the left axis
-                    without the opioid curves becoming invisible at the bottom. */}
-                {[...activeDrugs].flatMap((d) => {
+                {/* CURRENT SIMULATION — one Cp + Ce pair per active opioid, drug-coloured.
+                    Sedatives are rendered separately in <SedationChart /> rows below the main
+                    chart (Phase 5-G-2-a) so this loop only iterates opioid drugs. */}
+                {activeOpioids.flatMap((d) => {
                   const sim = simByDrug.get(d);
                   if (!sim || sim.length === 0) return [];
                   const colors = DRUG_COLORS[d] || { ce: '#ec4899', cp: '#3b82f6' };
@@ -1294,6 +1306,26 @@ const App = () => {
               )
             }
           </div>
+
+          {/* Phase 5-G-2-a: per-sedative mini chart row(s).
+              Hidden entirely when no sedative is active — opioid-only sessions keep
+              the original UI exactly as before. Same X domain as main chart. */}
+          {activeSedatives.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {activeSedatives.map((d) => (
+                <SedationChart
+                  key={`sed-${d}`}
+                  drug={d}
+                  sim={simByDrug.get(d)}
+                  events={events.filter((e) => (e.drug || drug) === d)}
+                  simDuration={simDuration}
+                  isClockMode={isClockMode}
+                  startTime={startTime}
+                  currentSimMinutes={currentSimMinutes}
+                />
+              ))}
+            </div>
+          )}
 
           {/* Axis Controls */}
           <div className="flex flex-col sm:flex-row justify-end mt-2 gap-4 items-center bg-slate-50 p-2 rounded-lg border border-slate-100">

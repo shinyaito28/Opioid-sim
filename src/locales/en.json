@@ -72,5 +72,6 @@
     "summaryMin": "min",
     "minus30m": "-30m",
     "minus1h": "-1h",
-    "minus2h": "-2h"
+    "minus2h": "-2h",
+    "sedationMonitor": "Sedation monitor"
 }
