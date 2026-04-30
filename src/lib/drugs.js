@@ -162,9 +162,10 @@ export const DRUG_CLASS = {
 // concentrations are 1000× larger than opioid Ce — sharing a ng/mL axis would make opioid curves
 // invisible at the bottom of an auto-scaled chart.
 //
-// `yPresets` (sedatives only): clinically meaningful Y-max chips for the SedationChart zoom UI.
-// Bolus pharmacokinetics produce a brief Cp spike that dwarfs the therapeutic band when auto-
-// scaled — the chips let the user zoom into the band range with one tap.
+// `yDefaultMax` / `yMaxLimit` (sedatives only): SedationChart Y-axis zoom slider.
+// `yDefaultMax` is the value used when Auto-Y is toggled off — picked to fit the therapeutic
+// band cleanly. `yMaxLimit` is the upper bound the slider can reach. Sqrt mapping is used in
+// the slider so PD-focused small values (e.g., 0.1-0.5 ng/mL Ce) get fine resolution.
 export const DRUG_DISPLAY = {
   Fentanyl:      { unit: 'ng/mL',  divisor: 1 },
   Remifentanil:  { unit: 'ng/mL',  divisor: 1 },
@@ -172,8 +173,8 @@ export const DRUG_DISPLAY = {
   Hydromorphone: { unit: 'ng/mL',  divisor: 1 },
   Methadone:     { unit: 'ng/mL',  divisor: 1 },
   Sufentanil:    { unit: 'ng/mL',  divisor: 1 },
-  Propofol:      { unit: 'mcg/mL', divisor: 1000, yPresets: [5, 10, 20] },     // BIS target ~3-5 mcg/mL → 10 fits well
-  Dexmedetomidine: { unit: 'ng/mL', divisor: 1, yPresets: [1, 2, 5] },         // Sedation bands 0.2-1.9 ng/mL → 2 fits well
+  Propofol:      { unit: 'mcg/mL', divisor: 1000, yDefaultMax: 10, yMaxLimit: 50 },  // BIS target ~3-5 mcg/mL → 10 fits, slider goes up to 50
+  Dexmedetomidine: { unit: 'ng/mL', divisor: 1, yDefaultMax: 2, yMaxLimit: 20 },     // Sedation bands 0.2-1.9 ng/mL → 2 fits, slider goes up to 20
 };
 
 export const DRUG_LIST = Object.keys(DRUG_UNITS);

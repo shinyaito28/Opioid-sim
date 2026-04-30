@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ZoomIn } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -127,14 +128,16 @@ export default function SedationChart({
   const range = THERAPEUTIC_RANGES[drug] || {};
   const advancedKe0 = range.advancedKe0;
   const cpOnlyDefault = !!range.sedationBands && !range.bisTarget;
-  const yPresets = DRUG_DISPLAY[drug]?.yPresets || [];
+  const yDefaultMax = DRUG_DISPLAY[drug]?.yDefaultMax || 10;
+  const yMaxLimit = DRUG_DISPLAY[drug]?.yMaxLimit || 50;
 
   // Advanced toggle is per-drug-instance state. Shown only when the drug declares an advancedKe0.
   const [showAdvancedCe, setShowAdvancedCe] = useState(false);
-  // Y-axis zoom — 'auto' or numeric ceiling in display units. Lets the user clamp the axis to the
-  // therapeutic-band range so brief Cp spikes (e.g. Dex bolus initial 30-50 ng/mL) don't squash
-  // the 0.2-1.9 ng/mL band into the bottom 5% of the chart.
-  const [yMax, setYMax] = useState('auto');
+  // Y-axis zoom — Auto follows data, otherwise clamp to yMax (display units). Sqrt mapping in the
+  // slider gives fine PD-range resolution (0.1-2 ng/mL) while still reaching PK-range peaks.
+  const [yAuto, setYAuto] = useState(true);
+  const [yMax, setYMax] = useState(yDefaultMax);
+  const sliderMax = Math.round(Math.sqrt(yMaxLimit) * 10);
 
   if (!sim || sim.length === 0) return null;
 
@@ -168,37 +171,36 @@ export default function SedationChart({
         <h4 className="text-xs font-semibold text-slate-700">
           {shortName} — {t('sedationMonitor')}
         </h4>
-        <div className="flex flex-wrap items-center gap-1">
-          {yPresets.length > 0 && (
-            <div className="flex items-center gap-0.5 mr-1">
-              <span className="text-[9px] text-slate-500 mr-0.5">Y</span>
-              <button
-                type="button"
-                onClick={() => setYMax('auto')}
-                className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
-                  yMax === 'auto'
-                    ? 'bg-slate-700 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                Auto
-              </button>
-              {yPresets.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setYMax(p)}
-                  className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
-                    yMax === p
-                      ? 'bg-slate-700 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  ≤{p}
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <ZoomIn className="w-3 h-3 text-slate-500" />
+            <label className="flex items-center gap-1 text-[10px] cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={yAuto}
+                onChange={(e) => setYAuto(e.target.checked)}
+                className="accent-blue-600 rounded w-3 h-3"
+              />
+              <span>{t('autoY')}</span>
+            </label>
+            <input
+              type="range"
+              min="1"
+              max={sliderMax}
+              step="1"
+              value={Math.round(Math.sqrt(yMax) * 10)}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                const newMax = (val / 10) ** 2;
+                setYMax(Math.round(newMax * 100) / 100); // 2 decimal places for fine PD tuning
+                setYAuto(false);
+              }}
+              className={`w-20 md:w-24 accent-pink-500 ${yAuto ? 'opacity-50' : 'opacity-100'}`}
+            />
+            <span className="text-[10px] font-mono w-16 text-right text-slate-600 tabular-nums">
+              {yAuto ? t('autoY') : `${yMax} ${displayUnit}`}
+            </span>
+          </div>
           {advancedKe0 && (
             <button
               type="button"
@@ -237,8 +239,8 @@ export default function SedationChart({
             />
             <YAxis
               yAxisId="left"
-              domain={[0, yMax === 'auto' ? 'auto' : yMax]}
-              allowDataOverflow={yMax !== 'auto'}
+              domain={[0, yAuto ? 'auto' : yMax]}
+              allowDataOverflow={!yAuto}
               label={{ value: `Conc (${displayUnit})`, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
               fontSize={10}
             />
