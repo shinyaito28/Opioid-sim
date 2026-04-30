@@ -1094,7 +1094,28 @@ const App = () => {
             </div>
           </div>
 
-          <div className="h-[400px] w-full relative" ref={chartWrapperRef}>
+          <div
+            className="h-[400px] w-full relative cursor-pointer touch-manipulation"
+            ref={chartWrapperRef}
+            onTouchEnd={(e) => {
+              // iOS Safari fallback: Recharts' SVG onClick is unreliable on touch.
+              // Decode the tap location → minute manually using approximate plot-area
+              // boundaries (left YAxis ~60, right Burden ~40 when active + 10 margin).
+              if (chartPopover.open) return;
+              if (!e.changedTouches || e.changedTouches.length === 0) return;
+              const t = e.changedTouches[0];
+              const rect = chartWrapperRef.current?.getBoundingClientRect();
+              if (!rect) return;
+              const x = t.clientX - rect.left;
+              const y = t.clientY - rect.top;
+              const PLOT_LEFT = 60;
+              const PLOT_RIGHT_OFFSET = 10 + (activeDrugs.size > 0 ? 40 : 0);
+              if (x < PLOT_LEFT || x > rect.width - PLOT_RIGHT_OFFSET) return;
+              const xRatio = (x - PLOT_LEFT) / (rect.width - PLOT_LEFT - PLOT_RIGHT_OFFSET);
+              const minute = Math.max(0, Math.min(simDuration, Math.round(xRatio * simDuration)));
+              setChartPopover({ open: true, x, y, minute });
+            }}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
@@ -1407,6 +1428,13 @@ const App = () => {
                   isClockMode={isClockMode}
                   startTime={startTime}
                   currentSimMinutes={currentSimMinutes}
+                  drugList={Object.keys(DRUG_UNITS)}
+                  drugUnits={DRUG_UNITS}
+                  drugShortNames={DRUG_SHORT_NAMES}
+                  clinicalDefaults={CLINICAL_DEFAULTS}
+                  lastDoseByDrug={lastDoseByDrug}
+                  quickAddBolus={quickAddBolus}
+                  quickAddInfusion={quickAddInfusion}
                 />
               ))}
             </div>

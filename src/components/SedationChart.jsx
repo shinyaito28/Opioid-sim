@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ZoomIn } from 'lucide-react';
+import ChartEventPopover from './ChartEventPopover';
 import {
   LineChart,
   Line,
@@ -123,6 +124,15 @@ export default function SedationChart({
   isClockMode,
   startTime,
   currentSimMinutes,
+  // Phase 5-H-2: chart-click popover support — pass through from App.jsx to reuse existing
+  // event-add handlers. When omitted the chart simply has no click-to-add behaviour.
+  drugList,
+  drugUnits,
+  drugShortNames,
+  clinicalDefaults,
+  lastDoseByDrug,
+  quickAddBolus,
+  quickAddInfusion,
 }) {
   const { t } = useTranslation();
   const range = THERAPEUTIC_RANGES[drug] || {};
@@ -141,6 +151,11 @@ export default function SedationChart({
   const [yAuto, setYAuto] = useState(true);
   const [yMax, setYMax] = useState(yDefaultMax);
   const sliderMax = Math.round(Math.sqrt(yMaxLimit) * 10);
+
+  // Phase 5-H-2: chart-click popover anchored to the mini chart container.
+  const [popover, setPopover] = useState({ open: false, x: 0, y: 0, minute: 0 });
+  const chartAreaRef = useRef(null);
+  const clickEnabled = typeof quickAddBolus === 'function' && typeof quickAddInfusion === 'function';
 
   if (!sim || sim.length === 0) return null;
 
@@ -239,9 +254,42 @@ export default function SedationChart({
         </div>
       )}
 
-      <div className="h-[160px] w-full">
+      <div
+        ref={chartAreaRef}
+        className={`h-[160px] w-full relative ${clickEnabled ? 'cursor-pointer touch-manipulation' : ''}`}
+        onTouchEnd={clickEnabled ? (e) => {
+          // iOS Safari fallback — Recharts onClick is unreliable on touch.
+          if (popover.open) return;
+          if (!e.changedTouches || e.changedTouches.length === 0) return;
+          const tch = e.changedTouches[0];
+          const rect = chartAreaRef.current?.getBoundingClientRect();
+          if (!rect) return;
+          const x = tch.clientX - rect.left;
+          const y = tch.clientY - rect.top;
+          // Plot area for the mini chart: left YAxis ~60, right burden-spacer 40 + 10 margin.
+          const PLOT_LEFT = 60;
+          const PLOT_RIGHT_OFFSET = 50;
+          if (x < PLOT_LEFT || x > rect.width - PLOT_RIGHT_OFFSET) return;
+          const xRatio = (x - PLOT_LEFT) / (rect.width - PLOT_LEFT - PLOT_RIGHT_OFFSET);
+          const minute = Math.max(0, Math.min(simDuration, Math.round(xRatio * simDuration)));
+          setPopover({ open: true, x, y, minute });
+        } : undefined}
+      >
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={displaySim} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+          <LineChart
+            data={displaySim}
+            margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+            onClick={clickEnabled ? (e) => {
+              if (e && e.activeLabel != null && e.chartX != null && e.chartY != null) {
+                setPopover({
+                  open: true,
+                  x: e.chartX,
+                  y: e.chartY,
+                  minute: Math.max(0, Math.round(Number(e.activeLabel))),
+                });
+              }
+            } : undefined}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
             <XAxis
               dataKey="time"
@@ -414,6 +462,30 @@ export default function SedationChart({
             )}
           </LineChart>
         </ResponsiveContainer>
+
+        {clickEnabled && popover.open && (
+          <ChartEventPopover
+            open
+            onClose={() => setPopover((p) => ({ ...p, open: false }))}
+            position={{ x: popover.x, y: popover.y }}
+            containerSize={{
+              w: chartAreaRef.current?.clientWidth || 0,
+              h: chartAreaRef.current?.clientHeight || 0,
+            }}
+            initialMinute={popover.minute}
+            initialDrug={drug}
+            drugList={drugList}
+            drugUnits={drugUnits}
+            drugShortNames={drugShortNames}
+            clinicalDefaults={clinicalDefaults}
+            lastDoseByDrug={lastDoseByDrug}
+            isClockMode={isClockMode}
+            startTime={startTime}
+            quickAddBolus={quickAddBolus}
+            quickAddInfusion={quickAddInfusion}
+            t={t}
+          />
+        )}
       </div>
 
       {range.contextWarningKey && (
