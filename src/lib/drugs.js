@@ -161,6 +161,10 @@ export const DRUG_CLASS = {
 // by `divisor` before plotting and tooltip display. Sedatives use mcg/mL because therapeutic
 // concentrations are 1000× larger than opioid Ce — sharing a ng/mL axis would make opioid curves
 // invisible at the bottom of an auto-scaled chart.
+//
+// `yPresets` (sedatives only): clinically meaningful Y-max chips for the SedationChart zoom UI.
+// Bolus pharmacokinetics produce a brief Cp spike that dwarfs the therapeutic band when auto-
+// scaled — the chips let the user zoom into the band range with one tap.
 export const DRUG_DISPLAY = {
   Fentanyl:      { unit: 'ng/mL',  divisor: 1 },
   Remifentanil:  { unit: 'ng/mL',  divisor: 1 },
@@ -168,8 +172,8 @@ export const DRUG_DISPLAY = {
   Hydromorphone: { unit: 'ng/mL',  divisor: 1 },
   Methadone:     { unit: 'ng/mL',  divisor: 1 },
   Sufentanil:    { unit: 'ng/mL',  divisor: 1 },
-  Propofol:      { unit: 'mcg/mL', divisor: 1000 },
-  Dexmedetomidine: { unit: 'ng/mL', divisor: 1 }, // Hannivoort sim emits ng/mL directly
+  Propofol:      { unit: 'mcg/mL', divisor: 1000, yPresets: [5, 10, 20] },     // BIS target ~3-5 mcg/mL → 10 fits well
+  Dexmedetomidine: { unit: 'ng/mL', divisor: 1, yPresets: [1, 2, 5] },         // Sedation bands 0.2-1.9 ng/mL → 2 fits well
 };
 
 export const DRUG_LIST = Object.keys(DRUG_UNITS);

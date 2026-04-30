@@ -127,9 +127,14 @@ export default function SedationChart({
   const range = THERAPEUTIC_RANGES[drug] || {};
   const advancedKe0 = range.advancedKe0;
   const cpOnlyDefault = !!range.sedationBands && !range.bisTarget;
+  const yPresets = DRUG_DISPLAY[drug]?.yPresets || [];
 
   // Advanced toggle is per-drug-instance state. Shown only when the drug declares an advancedKe0.
   const [showAdvancedCe, setShowAdvancedCe] = useState(false);
+  // Y-axis zoom — 'auto' or numeric ceiling in display units. Lets the user clamp the axis to the
+  // therapeutic-band range so brief Cp spikes (e.g. Dex bolus initial 30-50 ng/mL) don't squash
+  // the 0.2-1.9 ng/mL band into the bottom 5% of the chart.
+  const [yMax, setYMax] = useState('auto');
 
   if (!sim || sim.length === 0) return null;
 
@@ -159,24 +164,56 @@ export default function SedationChart({
 
   return (
     <div className="glass rounded-xl p-3 border border-slate-200/60 shadow-sm">
-      <div className="flex items-center justify-between gap-2 mb-1">
+      <div className="flex flex-wrap items-center justify-between gap-y-1 gap-x-2 mb-1">
         <h4 className="text-xs font-semibold text-slate-700">
           {shortName} — {t('sedationMonitor')}
         </h4>
-        {advancedKe0 && (
-          <button
-            type="button"
-            onClick={() => setShowAdvancedCe((v) => !v)}
-            className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
-              showAdvancedCe
-                ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
-                : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
-            }`}
-            title={range.advancedKe0Source || ''}
-          >
-            {showAdvancedCe ? t('sedationCeOn') : t('sedationCeOff')}
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-1">
+          {yPresets.length > 0 && (
+            <div className="flex items-center gap-0.5 mr-1">
+              <span className="text-[9px] text-slate-500 mr-0.5">Y</span>
+              <button
+                type="button"
+                onClick={() => setYMax('auto')}
+                className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                  yMax === 'auto'
+                    ? 'bg-slate-700 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Auto
+              </button>
+              {yPresets.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setYMax(p)}
+                  className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                    yMax === p
+                      ? 'bg-slate-700 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  ≤{p}
+                </button>
+              ))}
+            </div>
+          )}
+          {advancedKe0 && (
+            <button
+              type="button"
+              onClick={() => setShowAdvancedCe((v) => !v)}
+              className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                showAdvancedCe
+                  ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
+                  : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+              }`}
+              title={range.advancedKe0Source || ''}
+            >
+              {showAdvancedCe ? t('sedationCeOn') : t('sedationCeOff')}
+            </button>
+          )}
+        </div>
       </div>
 
       {showAdvancedCe && advancedKe0 && (
@@ -200,7 +237,8 @@ export default function SedationChart({
             />
             <YAxis
               yAxisId="left"
-              domain={[0, 'auto']}
+              domain={[0, yMax === 'auto' ? 'auto' : yMax]}
+              allowDataOverflow={yMax !== 'auto'}
               label={{ value: `Conc (${displayUnit})`, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
               fontSize={10}
             />
