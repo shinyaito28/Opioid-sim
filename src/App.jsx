@@ -1015,12 +1015,42 @@ const App = () => {
 
         {/* --- MAIN CHART SECTION --- */}
         <div className="bg-white p-2 md:p-4 rounded-xl shadow border border-slate-200">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-2 gap-2">
+          <div className="flex flex-wrap justify-between items-center mb-2 gap-x-4 gap-y-2">
             <div>
               <h2 className="font-bold text-slate-700 text-lg">{t('chartTitle')}</h2>
               <p className="text-xs text-slate-500">
                 {t('chartLegend')}
               </p>
+            </div>
+
+            {/* Y-axis controls — same Auto + sqrt-slider pattern as SedationChart for visual
+                consistency. Moved here from the bottom Axis Controls strip so chart-display
+                concerns sit on the chart card and time-scope concerns sit on their own row. */}
+            <div className="flex items-center gap-1.5">
+              <ZoomIn className="w-3 h-3 text-slate-500" />
+              <label className="flex items-center gap-1 text-[11px] cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isAutoY}
+                  onChange={(e) => setIsAutoY(e.target.checked)}
+                  className="accent-blue-600 rounded w-3 h-3"
+                />
+                <span>{t('autoY')}</span>
+              </label>
+              <input
+                type="range" min="1" max="150" step="1"
+                value={Math.sqrt(yAxisMax) * 10}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  const newMax = (val / 10) ** 2;
+                  setYAxisMax(Math.round(newMax * 10) / 10);
+                  setIsAutoY(false);
+                }}
+                className={`w-24 md:w-32 accent-pink-500 ${isAutoY ? 'opacity-50' : 'opacity-100'}`}
+              />
+              <span className="text-[11px] font-mono w-20 text-right text-slate-600 tabular-nums">
+                {isAutoY ? t('autoY') : `${yAxisMax} ng/mL`}
+              </span>
             </div>
 
             <div className="flex gap-2">
@@ -1399,40 +1429,7 @@ const App = () => {
                   onChange={(e) => setSimDuration(Number(e.target.value))}
                   className="w-16 text-right text-xs border border-slate-300 rounded p-1 pr-1 font-mono focus:ring-1 focus:ring-blue-400 outline-none"
                 />
-                <span className="text-[10px] text-slate-400 absolute right-8 top-1.5 pointer-events-none"></span>
               </div>
-              <span className="text-xs text-slate-500">min</span>
-            </div>
-
-            <div className="h-4 w-px bg-slate-300 hidden sm:block"></div>
-
-            {/* Y-Axis Control */}
-            <div className="flex items-center gap-2">
-              <ZoomIn className="w-3 h-3 text-slate-500" />
-              <label className="flex items-center gap-1 text-xs cursor-pointer select-none mr-2">
-                <input
-                  type="checkbox"
-                  checked={isAutoY}
-                  onChange={(e) => setIsAutoY(e.target.checked)}
-                  className="accent-blue-600 rounded"
-                />
-                <span>{t('autoY')}</span>
-              </label>
-              <input
-                type="range" min="1" max="150" step="1"
-                value={Math.sqrt(yAxisMax) * 10}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  const newMax = (val / 10) ** 2;
-                  setYAxisMax(Math.round(newMax * 10) / 10);
-                  setIsAutoY(false);
-                }}
-                disabled={isAutoY && false}
-                className={`w-24 md:w-32 accent-pink-500 ${isAutoY ? 'opacity-50' : 'opacity-100'}`}
-              />
-              <span className="text-xs font-mono w-16 text-right">
-                {isAutoY ? t('autoCe') : `${yAxisMax} ng/ml`}
-              </span>
             </div>
           </div >
 
