@@ -6,6 +6,7 @@ import { Syringe, Clock, Settings, User, Activity, Plus, Trash2, Save, X, Eye, E
 import TopBar from './components/TopBar';
 import QuickEntry from './components/QuickEntry';
 import SedationChart from './components/SedationChart';
+import ChartEventPopover from './components/ChartEventPopover';
 import {
   THERAPEUTIC_RANGES,
   DRUG_UNITS,
@@ -229,6 +230,12 @@ const App = () => {
   const [infusionUnit, setInfusionUnit] = useState(DRUG_UNITS['Fentanyl'][0]);
 
   const [events, setEvents] = useState([]);
+
+  // Phase 5-H-1: chart-click popover state. Opens at the clicked location and lets the user
+  // pick drug / type / dose / time without leaving the chart, then calls quickAddBolus or
+  // quickAddInfusion. {open=false} keeps the popover hidden.
+  const [chartPopover, setChartPopover] = useState({ open: false, x: 0, y: 0, minute: 0 });
+  const chartWrapperRef = useRef(null);
 
   const [simDuration, setSimDuration] = useState(120);
   const [maxTimeScale, setMaxTimeScale] = useState(720);
@@ -1084,9 +1091,21 @@ const App = () => {
             </div>
           </div>
 
-          <div className="h-[400px] w-full relative">
+          <div className="h-[400px] w-full relative" ref={chartWrapperRef}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+              <LineChart
+                margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+                onClick={(e) => {
+                  if (e && e.activeLabel != null && e.chartX != null && e.chartY != null) {
+                    setChartPopover({
+                      open: true,
+                      x: e.chartX,
+                      y: e.chartY,
+                      minute: Math.max(0, Math.round(Number(e.activeLabel))),
+                    });
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis
                   dataKey="time"
@@ -1341,6 +1360,33 @@ const App = () => {
                 </div>
               )
             }
+
+            {/* Phase 5-H-1: chart-click popover. Anchored to chart wrapper (position: relative).
+                Reuses the existing quickAddBolus / quickAddInfusion handlers — no new business
+                logic. Outside-click + Escape close inside the component. */}
+            {chartPopover.open && (
+              <ChartEventPopover
+                open
+                onClose={() => setChartPopover((p) => ({ ...p, open: false }))}
+                position={{ x: chartPopover.x, y: chartPopover.y }}
+                containerSize={{
+                  w: chartWrapperRef.current?.clientWidth || 0,
+                  h: chartWrapperRef.current?.clientHeight || 0,
+                }}
+                initialMinute={chartPopover.minute}
+                initialDrug={drug}
+                drugList={Object.keys(DRUG_UNITS)}
+                drugUnits={DRUG_UNITS}
+                drugShortNames={DRUG_SHORT_NAMES}
+                clinicalDefaults={CLINICAL_DEFAULTS}
+                lastDoseByDrug={lastDoseByDrug}
+                isClockMode={isClockMode}
+                startTime={startTime}
+                quickAddBolus={quickAddBolus}
+                quickAddInfusion={quickAddInfusion}
+                t={t}
+              />
+            )}
           </div>
 
           {/* Phase 5-G-2-a: per-sedative mini chart row(s).
