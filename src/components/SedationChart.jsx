@@ -133,6 +133,10 @@ export default function SedationChart({
   lastDoseByDrug,
   quickAddBolus,
   quickAddInfusion,
+  // Phase 5-H-3 (B): edit-mode handlers from App.jsx. When supplied, tapping near an existing
+  // event marker opens the popover in edit mode with Update/Delete buttons.
+  onUpdate,
+  onDelete,
 }) {
   const { t } = useTranslation();
   const range = THERAPEUTIC_RANGES[drug] || {};
@@ -153,9 +157,21 @@ export default function SedationChart({
   const sliderMax = Math.round(Math.sqrt(yMaxLimit) * 10);
 
   // Phase 5-H-2: chart-click popover anchored to the mini chart container.
-  const [popover, setPopover] = useState({ open: false, x: 0, y: 0, minute: 0 });
+  // Phase 5-H-3 (B) added editingEventId for edit-mode popover.
+  const [popover, setPopover] = useState({ open: false, x: 0, y: 0, minute: 0, editingEventId: null });
   const chartAreaRef = useRef(null);
   const clickEnabled = typeof quickAddBolus === 'function' && typeof quickAddInfusion === 'function';
+
+  // Phase 5-H-3 (B): find an existing event near the clicked minute. The events array passed
+  // to this chart is already drug-filtered upstream, so no extra filter needed here.
+  const findEventNearMinute = (minute) => events.find((ev) => {
+    if (ev.type === 'bolus') return Math.abs(ev.time - minute) <= 1;
+    if (ev.type === 'infusion') {
+      const endTime = ev.isInfinite ? simDuration : ev.time + ev.duration;
+      return minute >= ev.time - 1 && minute <= endTime + 1;
+    }
+    return false;
+  });
 
   if (!sim || sim.length === 0) return null;
 
@@ -272,7 +288,8 @@ export default function SedationChart({
           if (x < PLOT_LEFT || x > rect.width - PLOT_RIGHT_OFFSET) return;
           const xRatio = (x - PLOT_LEFT) / (rect.width - PLOT_LEFT - PLOT_RIGHT_OFFSET);
           const minute = Math.max(0, Math.min(simDuration, Math.round(xRatio * simDuration)));
-          setPopover({ open: true, x, y, minute });
+          const nearbyEvent = findEventNearMinute(minute);
+          setPopover({ open: true, x, y, minute, editingEventId: nearbyEvent?.id ?? null });
         } : undefined}
       >
         <ResponsiveContainer width="100%" height="100%">
@@ -281,11 +298,14 @@ export default function SedationChart({
             margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
             onClick={clickEnabled ? (e) => {
               if (e && e.activeLabel != null && e.chartX != null && e.chartY != null) {
+                const minute = Math.max(0, Math.round(Number(e.activeLabel)));
+                const nearbyEvent = findEventNearMinute(minute);
                 setPopover({
                   open: true,
                   x: e.chartX,
                   y: e.chartY,
-                  minute: Math.max(0, Math.round(Number(e.activeLabel))),
+                  minute,
+                  editingEventId: nearbyEvent?.id ?? null,
                 });
               }
             } : undefined}
@@ -483,6 +503,11 @@ export default function SedationChart({
             startTime={startTime}
             quickAddBolus={quickAddBolus}
             quickAddInfusion={quickAddInfusion}
+            editingEvent={popover.editingEventId
+              ? events.find((ev) => ev.id === popover.editingEventId)
+              : null}
+            onUpdate={onUpdate}
+            onDelete={onDelete}
             t={t}
           />
         )}

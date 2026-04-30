@@ -237,7 +237,9 @@ const App = () => {
   // Phase 5-H-1: chart-click popover state. Opens at the clicked location and lets the user
   // pick drug / type / dose / time without leaving the chart, then calls quickAddBolus or
   // quickAddInfusion. {open=false} keeps the popover hidden.
-  const [chartPopover, setChartPopover] = useState({ open: false, x: 0, y: 0, minute: 0 });
+  // Phase 5-H-3 added editingEventId — when set to an event id, the popover opens in edit
+  // mode (Update / Delete buttons) instead of the default Add mode.
+  const [chartPopover, setChartPopover] = useState({ open: false, x: 0, y: 0, minute: 0, editingEventId: null });
   const chartWrapperRef = useRef(null);
 
   const [simDuration, setSimDuration] = useState(120);
@@ -714,6 +716,74 @@ const App = () => {
     setEditingId(null);
   };
 
+  // Phase 5-H-3 (A): manual startTime change in clock mode preserves each event's absolute
+  // wall-clock time by shifting event.time by the inverse delta. Without this, moving the
+  // chart origin from 10:42 to 11:00 would silently push every drug event 18 min later in
+  // absolute time (the user's original input was at 11:12, not 11:30).
+  const handleStartTimeChange = (newStartTime) => {
+    if (!isClockMode || newStartTime === startTime) {
+      setStartTime(newStartTime);
+      return;
+    }
+    const toMin = (s) => {
+      const [h, m] = s.split(':').map(Number);
+      return h * 60 + m;
+    };
+    const oldMin = toMin(startTime);
+    const newMin = toMin(newStartTime);
+    let delta = oldMin - newMin; // origin moved earlier → +, later → −
+    // 24h wrap: pick the smaller absolute shift (23:00 → 01:00 means "+2h", not "−22h")
+    if (delta > 12 * 60) delta -= 24 * 60;
+    if (delta < -12 * 60) delta += 24 * 60;
+    if (delta !== 0) {
+      setEvents((prev) => prev.map((e) => ({ ...e, time: e.time + delta })));
+    }
+    setStartTime(newStartTime);
+  };
+
+  // Phase 5-H-3 (B): find an existing event near a clicked minute on the chart so that the
+  // popover can open in edit mode instead of always adding a new event. Drug filter is used
+  // by SedationChart (drug-locked) but is null/undefined for the main chart.
+  const findEventNearMinute = (eventList, minute, drugFilter) => {
+    return eventList.find((ev) => {
+      if (drugFilter && (ev.drug || drug) !== drugFilter) return false;
+      if (ev.type === 'bolus') return Math.abs(ev.time - minute) <= 1;
+      if (ev.type === 'infusion') {
+        const endTime = ev.isInfinite ? simDuration : ev.time + ev.duration;
+        return minute >= ev.time - 1 && minute <= endTime + 1;
+      }
+      return false;
+    });
+  };
+
+  // Phase 5-H-3 (B): event update / delete — driven by ChartEventPopover when in edit mode.
+  // Update keeps the original id so list ordering and saved-trace identity remain stable.
+  // The popover passes raw user-entered values; this handler does the same standard-unit
+  // conversion that quickAddInfusion does so the simulation engine sees consistent data.
+  const handleEventUpdate = (oldId, data) => {
+    setEvents((prev) => prev.map((ev) => {
+      if (ev.id !== oldId) return ev;
+      if (data.type === 'bolus') {
+        return { id: oldId, drug: data.drug, type: 'bolus', time: data.time, amount: data.amount };
+      }
+      const standardRate = convertToStandardUnit(data.rate, data.unit, patient.weight, data.drug);
+      return {
+        id: oldId,
+        drug: data.drug,
+        type: 'infusion',
+        time: data.time,
+        rate: standardRate,
+        originalRate: data.rate,
+        originalUnit: data.unit,
+        duration: data.isInfinite ? Math.max(0, simDuration - data.time + 60) : data.duration,
+        isInfinite: data.isInfinite,
+      };
+    }));
+  };
+  const handleEventDelete = (eventId) => {
+    setEvents((prev) => prev.filter((ev) => ev.id !== eventId));
+  };
+
   // Phase 5-C: drug switch is now non-destructive — events stay because they're tagged per-drug,
   // and savedTraces from other drugs are no longer dropped. We only reset the detail-edit form's
   // defaults so it makes sense for the newly selected drug.
@@ -1113,7 +1183,8 @@ const App = () => {
               if (x < PLOT_LEFT || x > rect.width - PLOT_RIGHT_OFFSET) return;
               const xRatio = (x - PLOT_LEFT) / (rect.width - PLOT_LEFT - PLOT_RIGHT_OFFSET);
               const minute = Math.max(0, Math.min(simDuration, Math.round(xRatio * simDuration)));
-              setChartPopover({ open: true, x, y, minute });
+              const nearbyEvent = findEventNearMinute(events, minute);
+              setChartPopover({ open: true, x, y, minute, editingEventId: nearbyEvent?.id ?? null });
             }}
           >
             <ResponsiveContainer width="100%" height="100%">
@@ -1121,11 +1192,14 @@ const App = () => {
                 margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
                 onClick={(e) => {
                   if (e && e.activeLabel != null && e.chartX != null && e.chartY != null) {
+                    const minute = Math.max(0, Math.round(Number(e.activeLabel)));
+                    const nearbyEvent = findEventNearMinute(events, minute);
                     setChartPopover({
                       open: true,
                       x: e.chartX,
                       y: e.chartY,
-                      minute: Math.max(0, Math.round(Number(e.activeLabel))),
+                      minute,
+                      editingEventId: nearbyEvent?.id ?? null,
                     });
                   }
                 }}
@@ -1408,6 +1482,11 @@ const App = () => {
                 startTime={startTime}
                 quickAddBolus={quickAddBolus}
                 quickAddInfusion={quickAddInfusion}
+                editingEvent={chartPopover.editingEventId
+                  ? events.find((ev) => ev.id === chartPopover.editingEventId)
+                  : null}
+                onUpdate={handleEventUpdate}
+                onDelete={handleEventDelete}
                 t={t}
               />
             )}
@@ -1435,6 +1514,8 @@ const App = () => {
                   lastDoseByDrug={lastDoseByDrug}
                   quickAddBolus={quickAddBolus}
                   quickAddInfusion={quickAddInfusion}
+                  onUpdate={handleEventUpdate}
+                  onDelete={handleEventDelete}
                 />
               ))}
             </div>
@@ -1469,7 +1550,7 @@ const App = () => {
                   <input
                     type="time"
                     value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
+                    onChange={(e) => handleStartTimeChange(e.target.value)}
                     className="text-xs border border-slate-300 rounded p-1 mr-2"
                   />
                 )

@@ -81,5 +81,8 @@
     "sedationCeUnavailableReason": "この薬の効果部位モデルは未実装。PD エンドポイント (鎮痛・鎮静・解離・EEG・循環) は濃度-効果関係が個別で、単一の ke0 では全臨床効果を表せないため。",
     "dexContextWarning": "Dex の鎮静効果は文脈依存性が高く、覚醒・刺激・他剤併用・年齢・肝/心機能・ICU 病態により大きく変わる。",
     "ketamineContextWarning": "S-ケタミンの PK のみ (Noppers 2011)。ラセミ体ケタミンはモデル化されていないため、本濃度をラセミ体総濃度として解釈しないこと。Ce は意図的に非表示 — 詳細は「Ce 利用不可」注記参照。",
-    "ketamineHeatPainRef": "熱痛 C50 ~375 ng/mL (Sigtermans/Noppers 実験的 — 鎮静/麻酔閾値ではない)"
+    "ketamineHeatPainRef": "熱痛 C50 ~375 ng/mL (Sigtermans/Noppers 実験的 — 鎮静/麻酔閾値ではない)",
+    "editingEventLabel": "編集中",
+    "update": "更新",
+    "delete": "削除"
 }

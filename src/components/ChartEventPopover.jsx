@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Syringe, Plus, Minus, Clock, X } from 'lucide-react';
+import { Syringe, Plus, Minus, Clock, X, Trash2, Check, Edit2 } from 'lucide-react';
 
 // Per-drug bolus stepper increment — mirrors QuickEntry's table.
 const DRUG_DOSE_STEPS = {
@@ -32,8 +32,10 @@ const roundStep = (val, step) => {
   return parseFloat(val.toFixed(decimals));
 };
 
-// Floating in-chart popover for adding a single bolus or infusion event at a clicked position.
-// Reuses the existing quickAddBolus / quickAddInfusion handlers — no new business logic.
+// Floating in-chart popover for adding OR editing a single bolus or infusion event at a
+// clicked position. When editingEvent is null the popover is in Add mode and calls
+// quickAddBolus / quickAddInfusion. When editingEvent is supplied the popover pre-fills
+// from the event and shows Update / Delete buttons that drive onUpdate / onDelete.
 export default function ChartEventPopover({
   open,
   onClose,
@@ -50,8 +52,13 @@ export default function ChartEventPopover({
   startTime,
   quickAddBolus,
   quickAddInfusion,
+  // Phase 5-H-3 (B): edit mode props.
+  editingEvent,        // null | event object — when provided the popover is in edit mode
+  onUpdate,            // (oldId, newEventData) — called by Update button
+  onDelete,            // (eventId) — called by Delete button
   t,
 }) {
+  const isEdit = !!editingEvent;
   const ref = useRef(null);
 
   const [drug, setDrug] = useState(initialDrug);
@@ -63,9 +70,38 @@ export default function ChartEventPopover({
   const [isInfinite, setIsInfinite] = useState(true);
   const [time, setTime] = useState(initialMinute);
 
-  // Reset everything when the popover is re-opened at a new click point.
+  // Reset everything when the popover is re-opened. In edit mode pre-fill from the
+  // editingEvent; in add mode pre-fill from lastDoseByDrug like before.
   useEffect(() => {
     if (!open) return;
+    if (editingEvent) {
+      const evDrug = editingEvent.drug || initialDrug;
+      setDrug(evDrug);
+      setType(editingEvent.type);
+      setTime(editingEvent.time);
+      if (editingEvent.type === 'bolus') {
+        setAmount(String(editingEvent.amount ?? ''));
+        // Keep infusion fields seeded from lastDose so the user can switch type without losing context
+        const last = lastDoseByDrug?.[evDrug];
+        setRate(last?.infusionRate != null ? String(last.infusionRate) : '');
+        setUnit(last?.infusionUnit && drugUnits[evDrug]?.includes(last.infusionUnit)
+          ? last.infusionUnit
+          : (drugUnits[evDrug]?.[0] || 'mcg/kg/hr'));
+        setDuration(last?.infusionDuration != null ? last.infusionDuration : 60);
+        setIsInfinite(typeof last?.isInfinite === 'boolean' ? last.isInfinite : true);
+      } else {
+        setRate(String(editingEvent.originalRate ?? editingEvent.rate ?? ''));
+        setUnit(editingEvent.originalUnit && drugUnits[evDrug]?.includes(editingEvent.originalUnit)
+          ? editingEvent.originalUnit
+          : (drugUnits[evDrug]?.[0] || 'mcg/kg/hr'));
+        setDuration(editingEvent.duration ?? 60);
+        setIsInfinite(!!editingEvent.isInfinite);
+        const last = lastDoseByDrug?.[evDrug];
+        setAmount(last?.bolusAmount != null ? String(last.bolusAmount) : '');
+      }
+      return;
+    }
+    // Add mode (default)
     setDrug(initialDrug);
     setType('bolus');
     setTime(initialMinute);
@@ -80,7 +116,7 @@ export default function ChartEventPopover({
     setDuration(last?.infusionDuration != null ? last.infusionDuration : 60);
     setIsInfinite(typeof last?.isInfinite === 'boolean' ? last.isInfinite : true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialDrug, initialMinute]);
+  }, [open, initialDrug, initialMinute, editingEvent?.id]);
 
   // Drug switch within the popover — re-pull defaults for the new drug, keep the time.
   useEffect(() => {
@@ -139,6 +175,32 @@ export default function ChartEventPopover({
     onClose();
   };
 
+  // Phase 5-H-3 (B): pass raw user inputs to App.jsx so handleEventUpdate can apply the
+  // same standard-unit conversion path quickAddInfusion uses for new events.
+  const handleUpdate = () => {
+    if (!editingEvent || !valEntered) return;
+    if (type === 'bolus') {
+      onUpdate(editingEvent.id, { drug, type: 'bolus', time, amount: parseFloat(amount) });
+    } else {
+      onUpdate(editingEvent.id, {
+        drug,
+        type: 'infusion',
+        time,
+        rate: parseFloat(rate),
+        unit,
+        duration: parseFloat(duration),
+        isInfinite,
+      });
+    }
+    onClose();
+  };
+
+  const handleDelete = () => {
+    if (!editingEvent) return;
+    onDelete(editingEvent.id);
+    onClose();
+  };
+
   // Edge clamp — keep the popover inside the chart wrapper. Width fixed at ~290px for w-72.
   const POPOVER_W = 290;
   const POPOVER_H = 240; // approximate, used for top-clamp only
@@ -162,11 +224,19 @@ export default function ChartEventPopover({
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-slate-700">
-          {isClockMode
-            ? `${minutesToTime(time, startTime)} (${time} min)`
-            : `${time} min`}
-        </span>
+        <div className="flex items-center gap-1.5">
+          {isEdit && <Edit2 className="w-3 h-3 text-amber-600" />}
+          <span className="text-xs font-semibold text-slate-700">
+            {isClockMode
+              ? `${minutesToTime(time, startTime)} (${time} min)`
+              : `${time} min`}
+          </span>
+          {isEdit && (
+            <span className="text-[9px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 py-0.5">
+              {t('editingEventLabel')}
+            </span>
+          )}
+        </div>
         <button
           onClick={onClose}
           className="text-slate-400 hover:text-slate-700"
@@ -325,15 +395,35 @@ export default function ChartEventPopover({
         </button>
       </div>
 
-      {/* Add */}
-      <button
-        onClick={handleAdd}
-        disabled={!valEntered}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-1.5 rounded font-semibold text-sm disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-      >
-        <Plus className="w-3.5 h-3.5" />
-        Add
-      </button>
+      {/* Action buttons — Add (default) or Update + Delete (edit mode) */}
+      {isEdit ? (
+        <div className="flex gap-1.5">
+          <button
+            onClick={handleUpdate}
+            disabled={!valEntered}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-1.5 rounded font-semibold text-sm disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+          >
+            <Check className="w-3.5 h-3.5" />
+            {t('update')}
+          </button>
+          <button
+            onClick={handleDelete}
+            className="px-3 bg-red-600 hover:bg-red-700 text-white py-1.5 rounded font-semibold text-sm flex items-center justify-center gap-1"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            {t('delete')}
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={handleAdd}
+          disabled={!valEntered}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-1.5 rounded font-semibold text-sm disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add
+        </button>
+      )}
     </div>
   );
 }
