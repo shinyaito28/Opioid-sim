@@ -73,5 +73,9 @@
     "minus30m": "-30m",
     "minus1h": "-1h",
     "minus2h": "-2h",
-    "sedationMonitor": "Sedation monitor"
+    "sedationMonitor": "Sedation monitor",
+    "sedationCeOff": "Show Ce (advanced)",
+    "sedationCeOn": "Hide Ce",
+    "sedationAdvancedCeNote": "Ce derived from {{source}} (ke0 = {{ke0}}/min). Exploratory PKPD — not for clinical dosing decisions.",
+    "dexContextWarning": "Dexmedetomidine sedation is highly context-dependent — arousal, stimulation, co-administered drugs, age, hepatic/cardiac function, and ICU illness substantially alter the clinical effect."
 }

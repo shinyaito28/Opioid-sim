@@ -61,6 +61,27 @@ export const THERAPEUTIC_RANGES = {
     // (Phase 5-G-5) will add proper hypnotic-analgesic interaction modelling.
     bisTarget: { min: 3.0, max: 5.0 }, // mcg/mL — Schnider/Eleveld TCI band for GA
     label: 'BIS target (3.0-5.0 mcg/mL)'
+  },
+  'Dexmedetomidine': {
+    // Sedative — Hannivoort 2015 PK is plasma-only (no PD/effect-site model). The SedationChart
+    // therefore displays Cp by default and overlays Cp-based clinical sedation bands sourced from
+    // the Weerink 2017 review (PMC5511603, open access):
+    //   - 0.2-0.3 ng/mL: significant / rousable sedation
+    //   - >1.9 ng/mL: possible unarousable deep sedation
+    // ke0 is intentionally not included in the default model so the chart never implies a
+    // pharmacodynamic precision the source paper does not support.
+    sedationBands: [
+      { min: 0.2, max: 0.3, kind: 'light' },
+      { min: 1.9, max: 10,  kind: 'deep'  } // 10 ng/mL clamp — clinical Cp rarely exceeds this
+    ],
+    // Advanced/research-only ke0 from Colin et al. BJA 2017;119:200-210 (PMID:28854538) — MOAA/S
+    // sedation endpoint in healthy volunteers. Surfaces in SedationChart only when the user opts
+    // into the explicit Advanced toggle; the Ce line is then labelled as exploratory PKPD, not a
+    // clinical dosing target.
+    advancedKe0: 0.0428, // /min  →  t1/2,ke0 ≈ 16.2 min
+    advancedKe0Source: 'Colin 2017 MOAA/S endpoint',
+    contextWarningKey: 'dexContextWarning',
+    label: 'Sedation 0.2-0.3 (light) / >1.9 (deep) ng/mL — Weerink 2017'
   }
 };
 
@@ -71,7 +92,8 @@ export const DRUG_UNITS = {
   'Hydromorphone': ['mg/kg/hr', 'mg/hr', 'mcg/kg/min'],
   'Methadone': ['mg/hr'],
   'Sufentanil': ['mcg/kg/hr', 'mcg/hr'],
-  'Propofol': ['mcg/kg/min', 'mg/kg/hr', 'mg/hr'] // typical TCI / clinical infusion units
+  'Propofol': ['mcg/kg/min', 'mg/kg/hr', 'mg/hr'], // typical TCI / clinical infusion units
+  'Dexmedetomidine': ['mcg/kg/hr', 'mcg/hr', 'mcg/kg/min'] // ICU sedation maintenance
 };
 
 export const CLINICAL_DEFAULTS = {
@@ -81,7 +103,8 @@ export const CLINICAL_DEFAULTS = {
   'Hydromorphone': { bolus: 0.02, rate: 0.005, duration: 120, unit: 'mg' }, // Bolus: 0.02 mg/kg, Rate: 0.005 mg/kg/hr
   'Methadone': { bolus: 0.1, rate: 0, duration: 60, unit: 'mg' }, // Bolus: 0.1 mg/kg
   'Sufentanil': { bolus: 0.2, rate: 0.3, duration: 60, unit: 'mcg' }, // Bolus: 0.2 mcg/kg, Rate: 0.3 mcg/kg/hr
-  'Propofol': { bolus: 1.5, rate: 100, duration: 60, unit: 'mg' } // Bolus: 1.5 mg/kg (induction), Rate: 100 mcg/kg/min (GA maintenance)
+  'Propofol': { bolus: 1.5, rate: 100, duration: 60, unit: 'mg' }, // Bolus: 1.5 mg/kg (induction), Rate: 100 mcg/kg/min (GA maintenance)
+  'Dexmedetomidine': { bolus: 1.0, rate: 0.7, duration: 60, unit: 'mcg' } // Bolus: 1 mcg/kg loading over 10 min, Rate: 0.7 mcg/kg/hr maintenance (ICU range 0.2–1.4)
 };
 
 export const AVAILABLE_MODELS = {
@@ -91,7 +114,8 @@ export const AVAILABLE_MODELS = {
   'Hydromorphone': ['Jeleazcov (2014) Adult', 'Balyan (2020) Pediatric', 'Standard (Adult)', 'Pediatric (Scaled)'],
   'Methadone': ['Standard (Adult)'],
   'Sufentanil': ['Gepts (1995) Adult', 'Bartkowska-Sniatkowska (2016) PICU'],
-  'Propofol': ['Eleveld (2018) General-purpose']
+  'Propofol': ['Eleveld (2018) General-purpose'],
+  'Dexmedetomidine': ['Hannivoort (2015) Adult']
 };
 
 // Short labels for chart event markers and QuickEntry chips
@@ -102,7 +126,8 @@ export const DRUG_SHORT_NAMES = {
   'Hydromorphone': 'HM',
   'Methadone': 'Met',
   'Sufentanil': 'Suf',
-  'Propofol': 'Prop'
+  'Propofol': 'Prop',
+  'Dexmedetomidine': 'Dex'
 };
 
 // Per-drug colour pair (Ce solid + Cp lighter) for chart lines and event markers.
@@ -116,6 +141,7 @@ export const DRUG_COLORS = {
   Hydromorphone: { ce: '#ea580c', cp: '#fdba74' }, // orange
   Methadone:     { ce: '#16a34a', cp: '#86efac' }, // green
   Propofol:      { ce: '#0d9488', cp: '#5eead4' }, // teal — sedative class
+  Dexmedetomidine: { ce: '#4f46e5', cp: '#a5b4fc' }, // indigo — sedative class, distinguishable from Propofol teal
 };
 
 // Drug class — affects whether Ce contributes to the Combined Opioid Burden Index.
@@ -128,6 +154,7 @@ export const DRUG_CLASS = {
   Methadone:     'opioid',
   Sufentanil:    'opioid',
   Propofol:      'sedative',
+  Dexmedetomidine: 'sedative',
 };
 
 // Display unit per drug. The simulation engine emits values in ng/mL internally; the UI divides
@@ -142,6 +169,7 @@ export const DRUG_DISPLAY = {
   Methadone:     { unit: 'ng/mL',  divisor: 1 },
   Sufentanil:    { unit: 'ng/mL',  divisor: 1 },
   Propofol:      { unit: 'mcg/mL', divisor: 1000 },
+  Dexmedetomidine: { unit: 'ng/mL', divisor: 1 }, // Hannivoort sim emits ng/mL directly
 };
 
 export const DRUG_LIST = Object.keys(DRUG_UNITS);
@@ -481,6 +509,29 @@ export const getPKParameters = (drug, model, patient) => {
       params.Q3 = 0;
       params.ke0 = 0.15;
     }
+  }
+  // --- DEXMEDETOMIDINE ---
+  else if (drug === 'Dexmedetomidine') {
+    // Reference: Hannivoort LN, Eleveld DJ, Proost JH, Absalom AR, Vereecke H, Struys MMRF.
+    // Anesthesiology 2015;123:357-367. PMID:26068206.
+    // "Development of an Optimized Pharmacokinetic Model of Dexmedetomidine Using
+    //  Target-Controlled Infusion in Healthy Volunteers."
+    // Three-compartment allometric model. Weight is the only covariate identified by the authors.
+    // Reference: 70-kg adult; allometric exponent 1.0 for volumes, 0.75 for clearances (standard).
+    // PK values verified directly from the PubMed abstract on 2026-04-29.
+    //
+    // ke0 is intentionally 0: Hannivoort 2015 is a PK-only paper. The SedationChart consequently
+    // shows Cp only by default and overlays the Cp-based clinical sedation bands from Weerink 2017
+    // (PMC5511603). An explicit Advanced toggle in the chart UI re-derives Ce on the fly using the
+    // Colin 2017 MOAA/S ke0 = 0.0428 /min (PMID:28854538), labelled as exploratory PKPD.
+    const wRatio = weight / 70;
+    params.V1 = 1.78 * wRatio;
+    params.V2 = 30.3 * wRatio;
+    params.V3 = 52.0 * wRatio;
+    params.Cl = 0.686 * (wRatio ** 0.75);
+    params.Q2 = 2.98  * (wRatio ** 0.75);
+    params.Q3 = 0.602 * (wRatio ** 0.75);
+    params.ke0 = 0;
   }
   // --- PROPOFOL ---
   else if (drug === 'Propofol') {

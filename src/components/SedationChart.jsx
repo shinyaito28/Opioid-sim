@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   LineChart,
@@ -33,7 +33,23 @@ const minutesToTime = (minutes, startStr) => {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 };
 
-// Inline tooltip — mirrors App.jsx's ChartTooltip but scoped to a single drug.
+// Forward-Euler Ce derivation from a Cp series for advanced/research mode.
+// Used when a drug's primary PK paper does not include a PD/effect-site model
+// (e.g., Hannivoort 2015 Dex) but a separate exploratory ke0 is documented and
+// the user opts in via the Advanced toggle.
+const computeCeFromCp = (sim, ke0) => {
+  if (!ke0 || ke0 <= 0 || !sim || sim.length < 2) {
+    return sim.map((p) => ({ ...p, ce: 0 }));
+  }
+  let ce = 0;
+  const dt = 1; // 1-min sample spacing matches simulation.js output cadence
+  return sim.map((p) => {
+    const dce = ke0 * ((p.cp || 0) - ce) * dt;
+    ce += dce;
+    return { time: p.time, cp: p.cp, ce: parseFloat(ce.toFixed(3)) };
+  });
+};
+
 const SedationTooltip = ({ active, payload, label, events, drug, isClockMode, startTime, displayUnit }) => {
   if (!active || !payload || payload.length === 0) return null;
   const time = Number(label);
@@ -91,6 +107,13 @@ const SedationTooltip = ({ active, payload, label, events, drug, isClockMode, st
   );
 };
 
+// Sedation band fill colours by clinical severity. Dex uses both; Propofol's bisTarget falls back
+// to the drug's accent (teal) since it represents a target rather than a danger zone.
+const BAND_COLORS = {
+  light: { fill: '#0d9488', opacity: 0.13 }, // teal — gentle / target zone
+  deep:  { fill: '#f59e0b', opacity: 0.13 }, // amber — caution / deep sedation
+};
+
 export default function SedationChart({
   drug,
   sim,
@@ -101,6 +124,12 @@ export default function SedationChart({
   currentSimMinutes,
 }) {
   const { t } = useTranslation();
+  const range = THERAPEUTIC_RANGES[drug] || {};
+  const advancedKe0 = range.advancedKe0;
+  const cpOnlyDefault = !!range.sedationBands && !range.bisTarget;
+
+  // Advanced toggle is per-drug-instance state. Shown only when the drug declares an advancedKe0.
+  const [showAdvancedCe, setShowAdvancedCe] = useState(false);
 
   if (!sim || sim.length === 0) return null;
 
@@ -108,24 +137,56 @@ export default function SedationChart({
   const shortName = DRUG_SHORT_NAMES[drug] || drug;
   const displayUnit = DRUG_DISPLAY[drug]?.unit || 'ng/mL';
   const divisor = DRUG_DISPLAY[drug]?.divisor || 1;
-  const displaySim = divisor === 1
-    ? sim
-    : sim.map((p) => ({ time: p.time, cp: p.cp / divisor, ce: p.ce / divisor }));
 
-  const bisTarget = THERAPEUTIC_RANGES[drug]?.bisTarget;
-  const sedationTarget = THERAPEUTIC_RANGES[drug]?.sedationTarget;
-  const targetBand = bisTarget || sedationTarget;
+  // Step 1: scale internal ng/mL to display unit (e.g., Propofol mcg/mL).
+  const scaledSim = useMemo(() => (
+    divisor === 1
+      ? sim
+      : sim.map((p) => ({ time: p.time, cp: p.cp / divisor, ce: p.ce / divisor }))
+  ), [sim, divisor]);
+
+  // Step 2: if Cp-only drug AND advanced toggle is on, derive Ce from Cp via the documented
+  // exploratory ke0. Otherwise use whatever the PK engine produced (real Ce for Propofol,
+  // 0 for Dex default mode).
+  const displaySim = useMemo(() => {
+    if (cpOnlyDefault && showAdvancedCe && advancedKe0) {
+      return computeCeFromCp(scaledSim, advancedKe0);
+    }
+    return scaledSim;
+  }, [scaledSim, cpOnlyDefault, showAdvancedCe, advancedKe0]);
+
+  const showCeLine = !cpOnlyDefault || (showAdvancedCe && advancedKe0);
 
   return (
     <div className="glass rounded-xl p-3 border border-slate-200/60 shadow-sm">
-      <h4 className="text-xs font-semibold text-slate-700 mb-1">
-        {shortName} — {t('sedationMonitor')}
-      </h4>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <h4 className="text-xs font-semibold text-slate-700">
+          {shortName} — {t('sedationMonitor')}
+        </h4>
+        {advancedKe0 && (
+          <button
+            type="button"
+            onClick={() => setShowAdvancedCe((v) => !v)}
+            className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+              showAdvancedCe
+                ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
+                : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+            }`}
+            title={range.advancedKe0Source || ''}
+          >
+            {showAdvancedCe ? t('sedationCeOn') : t('sedationCeOff')}
+          </button>
+        )}
+      </div>
+
+      {showAdvancedCe && advancedKe0 && (
+        <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-1.5">
+          {t('sedationAdvancedCeNote', { source: range.advancedKe0Source, ke0: advancedKe0 })}
+        </div>
+      )}
+
       <div className="h-[160px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          {/* margin + axis widths intentionally match the main chart so the X axis
-              left/right edges line up across both — left YAxis default width (~60),
-              right spacer width=40 mirrors the main chart's Burden axis. */}
           <LineChart data={displaySim} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
             <XAxis
@@ -143,8 +204,6 @@ export default function SedationChart({
               label={{ value: `Conc (${displayUnit})`, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
               fontSize={10}
             />
-            {/* Invisible right-side YAxis — reserves the same 40px slot the main
-                chart's Burden axis occupies, keeping X edges aligned. */}
             <YAxis yAxisId="burden-spacer" orientation="right" width={40} hide />
             <Tooltip
               content={
@@ -158,15 +217,32 @@ export default function SedationChart({
               }
             />
 
-            {targetBand && (
+            {/* Single BIS target band (Propofol) — drawn on the same left axis as the Ce line. */}
+            {range.bisTarget && (
               <ReferenceArea
                 yAxisId="left"
-                y1={targetBand.min}
-                y2={targetBand.max}
+                y1={range.bisTarget.min}
+                y2={range.bisTarget.max}
                 fill={colors.ce}
                 fillOpacity={0.10}
               />
             )}
+
+            {/* Multi-band sedation overlay (Dex) — Cp-axis bands derived from clinical literature. */}
+            {range.sedationBands && range.sedationBands.map((band, i) => {
+              const c = BAND_COLORS[band.kind] || { fill: colors.ce, opacity: 0.10 };
+              return (
+                <ReferenceArea
+                  key={`sed-band-${i}`}
+                  yAxisId="left"
+                  y1={band.min}
+                  y2={band.max}
+                  fill={c.fill}
+                  fillOpacity={c.opacity}
+                  ifOverflow="hidden"
+                />
+              );
+            })}
 
             {events.flatMap((evt) => {
               const evtUnit = getDoseUnitForDrug(drug);
@@ -243,16 +319,18 @@ export default function SedationChart({
               dot={false}
               isAnimationActive={false}
             />
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="ce"
-              name={`Ce ${shortName}`}
-              stroke={colors.ce}
-              strokeWidth={2.5}
-              dot={false}
-              isAnimationActive={false}
-            />
+            {showCeLine && (
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="ce"
+                name={`Ce ${shortName}`}
+                stroke={colors.ce}
+                strokeWidth={2.5}
+                dot={false}
+                isAnimationActive={false}
+              />
+            )}
 
             {isClockMode && currentSimMinutes != null && currentSimMinutes >= 0 && currentSimMinutes <= simDuration && (
               <ReferenceLine yAxisId="left" x={currentSimMinutes} stroke="#ef4444" strokeDasharray="3 3" />
@@ -260,6 +338,12 @@ export default function SedationChart({
           </LineChart>
         </ResponsiveContainer>
       </div>
+
+      {range.contextWarningKey && (
+        <p className="text-[10px] text-slate-500 italic mt-1.5 leading-tight">
+          {t(range.contextWarningKey)}
+        </p>
+      )}
     </div>
   );
 }

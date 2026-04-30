@@ -73,5 +73,9 @@
     "minus30m": "-30分",
     "minus1h": "-1h",
     "minus2h": "-2h",
-    "sedationMonitor": "鎮静モニタ"
+    "sedationMonitor": "鎮静モニタ",
+    "sedationCeOff": "Ce 表示 (advanced)",
+    "sedationCeOn": "Ce 非表示",
+    "sedationAdvancedCeNote": "Ce は {{source}} (ke0 = {{ke0}}/min) から導出。探索的 PKPD — 臨床投与判断には用いないこと。",
+    "dexContextWarning": "Dex の鎮静効果は文脈依存性が高く、覚醒・刺激・他剤併用・年齢・肝/心機能・ICU 病態により大きく変わる。"
 }

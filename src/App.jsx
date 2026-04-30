@@ -152,6 +152,7 @@ const getModelRequirements = (drug, model) => {
   if (drug === 'Methadone') return ['weight'];
   if (drug === 'Sufentanil') return ['weight'];
   if (drug === 'Propofol') return ['age', 'weight', 'height', 'gender']; // Eleveld uses all four covariates
+  if (drug === 'Dexmedetomidine') return ['weight']; // Hannivoort 2015 — weight is the only covariate
   return ['weight'];
 };
 
@@ -169,6 +170,7 @@ const getBestModel = (drug, age) => {
   if (drug === 'Methadone') return 'Standard (Adult)';
   if (drug === 'Sufentanil') return isPeds ? 'Bartkowska-Sniatkowska (2016) PICU' : 'Gepts (1995) Adult';
   if (drug === 'Propofol') return 'Eleveld (2018) General-purpose'; // Eleveld covers all ages
+  if (drug === 'Dexmedetomidine') return 'Hannivoort (2015) Adult';
   return 'Bae (2020) Adult';
 };
 
@@ -183,6 +185,7 @@ const estimateBolus = (drug, weight) => {
   else if (drug === 'Methadone') dose = weight * 0.1;    // 0.1 mg/kg
   else if (drug === 'Sufentanil') dose = weight * 0.1;   // 0.1 mcg/kg (cleaner than 0.15)
   else if (drug === 'Propofol') dose = weight * 1.5;     // 1.5 mg/kg (induction)
+  else if (drug === 'Dexmedetomidine') dose = weight * 1.0; // 1 mcg/kg loading bolus (over 10 min clinically)
 
   if (dose === 0) return 0;
 
@@ -1531,6 +1534,7 @@ const App = () => {
                     </optgroup>
                     <optgroup label="Sedatives">
                       <option value="Propofol">Propofol (mg)</option>
+                      <option value="Dexmedetomidine">Dexmedetomidine (mcg)</option>
                     </optgroup>
                   </select>
                 </div>
@@ -1567,6 +1571,9 @@ const App = () => {
                     </>}
                     {drug === 'Propofol' && <>
                       <option>Eleveld (2018) General-purpose</option>
+                    </>}
+                    {drug === 'Dexmedetomidine' && <>
+                      <option>Hannivoort (2015) Adult</option>
                     </>}
                   </select>
                 </div>
