@@ -62,6 +62,28 @@ export const THERAPEUTIC_RANGES = {
     bisTarget: { min: 3.0, max: 5.0 }, // mcg/mL — Schnider/Eleveld TCI band for GA
     label: 'BIS target (3.0-5.0 mcg/mL)'
   },
+  'Ketamine': {
+    // Sedative — S-ketamine PK only (Noppers I et al. Anesthesiology 2011;114:1435-45,
+    // PMC3560924 open access). Racemic ketamine PK is intentionally NOT implemented; the
+    // S-ketamine plasma concentrations shown here should not be interpreted as total
+    // racemic ketamine. ke0 is intentionally not implemented because PD endpoints
+    // (analgesia, sedation, dissociation, EEG, hemodynamics) have endpoint-specific
+    // concentration-effect relationships and no single ke0 captures all clinical effects
+    // (Sigtermans 2009 Pain CRPS infusion, Olofsen 2012 Anesthesiology, Noppers 2011 use
+    // sigmoid Emax linked directly to plasma — no effect-site delay assumed).
+    //
+    // Single experimental reference line at C50 = 375 ng/mL — heat-pain endpoint used in
+    // Noppers 2011 simulations (Sigtermans/Noppers anchor). Drawn as a labelled horizontal
+    // line (not a band) to communicate that this is an experimental analgesia anchor, not
+    // a sedation/anesthesia threshold.
+    experimentalReferenceLine: {
+      value: 375,
+      labelKey: 'ketamineHeatPainRef'
+    },
+    disabledCe: { reasonKey: 'sedationCeUnavailableReason' },
+    contextWarningKey: 'ketamineContextWarning',
+    label: 'S-ketamine Cp only — Noppers 2011 (heat-pain ref 375 ng/mL)'
+  },
   'Remimazolam': {
     // Sedative — 3-comp + effect-site model from Eleveld DJ et al. Br J Anaesth 2025
     // (PMC12597572, open access). The Eleveld 2025 model is a pooled analysis of 20
@@ -109,7 +131,8 @@ export const DRUG_UNITS = {
   'Methadone': ['mg/hr'],
   'Sufentanil': ['mcg/kg/hr', 'mcg/hr'],
   'Propofol': ['mcg/kg/min', 'mg/kg/hr', 'mg/hr'], // typical TCI / clinical infusion units
-  'Remimazolam': ['mg/kg/hr', 'mg/hr'], // GA maintenance 1-2 mg/kg/hr; ICU/sedation lower
+  'Remimazolam': ['mg/kg/hr', 'mg/hr', 'mcg/kg/min'], // GA maintenance 1-2 mg/kg/hr or 17-33 mcg/kg/min
+  'Ketamine': ['mg/kg/hr', 'mg/hr', 'mcg/kg/min'], // analgesic 0.1-0.5 mg/kg/hr; higher for sedation
   'Dexmedetomidine': ['mcg/kg/hr', 'mcg/hr', 'mcg/kg/min'] // ICU sedation maintenance
 };
 
@@ -122,6 +145,7 @@ export const CLINICAL_DEFAULTS = {
   'Sufentanil': { bolus: 0.2, rate: 0.3, duration: 60, unit: 'mcg' }, // Bolus: 0.2 mcg/kg, Rate: 0.3 mcg/kg/hr
   'Propofol': { bolus: 1.5, rate: 100, duration: 60, unit: 'mg' }, // Bolus: 1.5 mg/kg (induction), Rate: 100 mcg/kg/min (GA maintenance)
   'Remimazolam': { bolus: 0.1, rate: 1.0, duration: 60, unit: 'mg' }, // Bolus: 0.1 mg/kg (sedation/induction proxy), Rate: 1 mg/kg/hr (GA maintenance)
+  'Ketamine': { bolus: 0.5, rate: 0.2, duration: 60, unit: 'mg' }, // Bolus: 0.5 mg/kg sub-anesthetic, Rate: 0.2 mg/kg/hr analgesic infusion
   'Dexmedetomidine': { bolus: 1.0, rate: 0.7, duration: 60, unit: 'mcg' } // Bolus: 1 mcg/kg loading over 10 min, Rate: 0.7 mcg/kg/hr maintenance (ICU range 0.2–1.4)
 };
 
@@ -134,6 +158,7 @@ export const AVAILABLE_MODELS = {
   'Sufentanil': ['Gepts (1995) Adult', 'Bartkowska-Sniatkowska (2016) PICU'],
   'Propofol': ['Eleveld (2018) General-purpose'],
   'Remimazolam': ['Eleveld (2025) Adult'],
+  'Ketamine': ['Noppers (2011) S-ketamine'],
   'Dexmedetomidine': ['Hannivoort (2015) Adult']
 };
 
@@ -147,6 +172,7 @@ export const DRUG_SHORT_NAMES = {
   'Sufentanil': 'Suf',
   'Propofol': 'Prop',
   'Remimazolam': 'Rmz',
+  'Ketamine': 'Ket',
   'Dexmedetomidine': 'Dex'
 };
 
@@ -162,6 +188,7 @@ export const DRUG_COLORS = {
   Methadone:     { ce: '#16a34a', cp: '#86efac' }, // green
   Propofol:      { ce: '#0d9488', cp: '#5eead4' }, // teal — sedative class
   Remimazolam:   { ce: '#c026d3', cp: '#f0abfc' }, // fuchsia — sedative, distinguishable from teal/indigo/violet
+  Ketamine:      { ce: '#e11d48', cp: '#fda4af' }, // rose — sedative, distinguishable from Mor red and other sedatives
   Dexmedetomidine: { ce: '#4f46e5', cp: '#a5b4fc' }, // indigo — sedative class, distinguishable from Propofol teal
 };
 
@@ -176,6 +203,7 @@ export const DRUG_CLASS = {
   Sufentanil:    'opioid',
   Propofol:      'sedative',
   Remimazolam:   'sedative',
+  Ketamine:      'sedative',
   Dexmedetomidine: 'sedative',
 };
 
@@ -197,6 +225,7 @@ export const DRUG_DISPLAY = {
   Sufentanil:    { unit: 'ng/mL',  divisor: 1 },
   Propofol:      { unit: 'mcg/mL', divisor: 1000, yDefaultMax: 10, yMaxLimit: 50 },  // BIS target ~3-5 mcg/mL → 10 fits, slider goes up to 50
   Remimazolam:   { unit: 'mcg/mL', divisor: 1000, yDefaultMax: 2,  yMaxLimit: 5 },   // GA target 0.4-0.8 mcg/mL Ce → 2 fits, peak Cp ~3-5
+  Ketamine:      { unit: 'ng/mL',  divisor: 1,    yDefaultMax: 500, yMaxLimit: 3000 }, // heat-pain ref 375 ng/mL; bolus peak ~1-3 mcg/mL
   Dexmedetomidine: { unit: 'ng/mL', divisor: 1, yDefaultMax: 2, yMaxLimit: 20 },     // Sedation bands 0.2-1.9 ng/mL → 2 fits, slider goes up to 20
 };
 
@@ -206,7 +235,7 @@ export const getDoseUnitForDrug = (drug) => CLINICAL_DEFAULTS[drug]?.unit || 'mc
 
 // Drugs whose user-facing dose is in mg (not mcg). The simulation engine multiplies bolus
 // amounts by 1000 for these so all internal mass quantities are in mcg, giving Cp/Ce in ng/mL.
-const MG_DRUGS = ['Morphine', 'Hydromorphone', 'Methadone', 'Propofol', 'Remimazolam'];
+const MG_DRUGS = ['Morphine', 'Hydromorphone', 'Methadone', 'Propofol', 'Remimazolam', 'Ketamine'];
 
 export const calculateLBM = (weight, height, gender) => {
   if (!height || !weight) return weight;
@@ -561,6 +590,35 @@ export const getPKParameters = (drug, model, patient) => {
     params.Q2 = 1.45  * (wRatio ** 0.75);
     params.Q3 = 0.298 * (wRatio ** 0.75);
     params.ke0 = 0.298;
+  }
+  // --- KETAMINE ---
+  else if (drug === 'Ketamine') {
+    // Reference: Noppers I et al. Anesthesiology 2011;114:1435-45. PMC3560924 (open access).
+    // "Effect of rifampicin on S-ketamine and S-norketamine plasma concentrations..."
+    // S-ketamine three-compartment model — placebo-arm baseline values (Table 2). All
+    // numeric parameters verified directly from PMC full text on 2026-04-29.
+    //
+    // IMPORTANT: This is the S-ketamine / esketamine model. Racemic ketamine has different
+    // disposition (R-enantiomer clearance differs and norketamine contribution differs);
+    // racemic Cp is NOT modelled here. The contextWarning in THERAPEUTIC_RANGES makes this
+    // explicit in the UI.
+    //
+    // Reference subject: 70-kg adult; allometric V scales with W^1.0, CL/Q with W^0.75
+    // (verbatim from the paper's "scaled via WT/70" wording).
+    //
+    // ke0 = 0 intentionally. Noppers 2011 modelled acute analgesia with sigmoid Emax linked
+    // to plasma directly (no effect-site delay). PD endpoints (analgesia, sedation,
+    // dissociation, EEG) need endpoint-specific models — no single ke0 captures all
+    // clinical effects. The chart therefore renders Cp only with the 375 ng/mL heat-pain
+    // reference line as an experimental anchor (THERAPEUTIC_RANGES.experimentalReferenceLine).
+    const wRatio = weight / 70;
+    params.V1 = 17.0 * wRatio;
+    params.V2 = 28.3 * wRatio;
+    params.V3 = 147  * wRatio;
+    params.Cl = (93.5 / 60) * (wRatio ** 0.75); // L/h → L/min
+    params.Q2 = (127  / 60) * (wRatio ** 0.75);
+    params.Q3 = (91.9 / 60) * (wRatio ** 0.75);
+    params.ke0 = 0;
   }
   // --- DEXMEDETOMIDINE ---
   else if (drug === 'Dexmedetomidine') {

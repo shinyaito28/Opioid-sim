@@ -77,5 +77,9 @@
     "sedationCeOff": "Show Ce (advanced)",
     "sedationCeOn": "Hide Ce",
     "sedationAdvancedCeNote": "Ce derived from {{source}} (ke0 = {{ke0}}/min). Exploratory PKPD — not for clinical dosing decisions.",
-    "dexContextWarning": "Dexmedetomidine sedation is highly context-dependent — arousal, stimulation, co-administered drugs, age, hepatic/cardiac function, and ICU illness substantially alter the clinical effect."
+    "sedationCeUnavailable": "Ce N/A",
+    "sedationCeUnavailableReason": "Effect-site model not implemented for this drug — PD endpoints (analgesia, sedation, dissociation, EEG, hemodynamics) have endpoint-specific concentration-effect relationships and no single ke0 captures all clinical effects.",
+    "dexContextWarning": "Dexmedetomidine sedation is highly context-dependent — arousal, stimulation, co-administered drugs, age, hepatic/cardiac function, and ICU illness substantially alter the clinical effect.",
+    "ketamineContextWarning": "S-ketamine PK only (Noppers 2011) — racemic ketamine is not modelled; do not interpret these concentrations as total racemic ketamine. Ce intentionally not shown — see Ce N/A note for why.",
+    "ketamineHeatPainRef": "Heat-pain C50 ~375 ng/mL (Sigtermans/Noppers, experimental — not a sedation/anesthesia threshold)"
 }

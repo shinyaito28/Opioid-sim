@@ -127,7 +127,10 @@ export default function SedationChart({
   const { t } = useTranslation();
   const range = THERAPEUTIC_RANGES[drug] || {};
   const advancedKe0 = range.advancedKe0;
-  const cpOnlyDefault = !!range.sedationBands && !range.bisTarget;
+  const disabledCe = range.disabledCe;
+  // Cp-only when the drug declares sedationBands instead of bisTarget (Dex), or explicitly
+  // disables Ce (Ketamine — endpoint-specific PD, no single ke0).
+  const cpOnlyDefault = (!!range.sedationBands && !range.bisTarget) || !!disabledCe;
   const yDefaultMax = DRUG_DISPLAY[drug]?.yDefaultMax || 10;
   const yMaxLimit = DRUG_DISPLAY[drug]?.yMaxLimit || 50;
 
@@ -163,7 +166,9 @@ export default function SedationChart({
     return scaledSim;
   }, [scaledSim, cpOnlyDefault, showAdvancedCe, advancedKe0]);
 
-  const showCeLine = !cpOnlyDefault || (showAdvancedCe && advancedKe0);
+  // Ce line shown when: (a) drug has full PD (Propofol, Rmz) OR (b) drug has advancedKe0 and
+  // the user opted in via the toggle. disabledCe overrides everything — never draw Ce.
+  const showCeLine = !disabledCe && (!cpOnlyDefault || (showAdvancedCe && advancedKe0));
 
   return (
     <div className="glass rounded-xl p-3 border border-slate-200/60 shadow-sm">
@@ -213,6 +218,16 @@ export default function SedationChart({
               title={range.advancedKe0Source || ''}
             >
               {showAdvancedCe ? t('sedationCeOn') : t('sedationCeOff')}
+            </button>
+          )}
+          {disabledCe && (
+            <button
+              type="button"
+              disabled
+              className="text-[10px] px-2 py-0.5 rounded border bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
+              title={t(disabledCe.reasonKey)}
+            >
+              {t('sedationCeUnavailable')}
             </button>
           )}
         </div>
@@ -283,6 +298,28 @@ export default function SedationChart({
                 />
               );
             })}
+
+            {/* Experimental reference line (Ketamine heat-pain anchor). Drawn as a thin dashed
+                line, NOT a band, to communicate this is an experimental analgesia anchor and
+                not a sedation/anesthesia threshold. */}
+            {range.experimentalReferenceLine && (
+              <ReferenceLine
+                yAxisId="left"
+                y={range.experimentalReferenceLine.value}
+                stroke="#64748b"
+                strokeDasharray="3 3"
+                strokeWidth={1}
+                ifOverflow="hidden"
+              >
+                <Label
+                  value={t(range.experimentalReferenceLine.labelKey)}
+                  position="insideTopRight"
+                  fill="#64748b"
+                  fontSize={9}
+                  offset={4}
+                />
+              </ReferenceLine>
+            )}
 
             {events.flatMap((evt) => {
               const evtUnit = getDoseUnitForDrug(drug);

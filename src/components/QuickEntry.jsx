@@ -15,6 +15,7 @@ const DRUG_DOSE_STEPS = {
   Sufentanil:    5,
   Propofol:      10,
   Remimazolam:   1,  // typical induction bolus 5-12 mg → ±1 mg increments
+  Ketamine:      5,  // typical sub-anesthetic to induction range 25-150 mg → ±5 mg increments
   Dexmedetomidine: 10, // typical loading bolus increments — 70 kg adult = 1 mcg/kg ≈ 70 mcg
 };
 

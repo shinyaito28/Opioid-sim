@@ -11,6 +11,7 @@ const DRUG_DOSE_STEPS = {
   Sufentanil:       5,
   Propofol:        10,
   Remimazolam:      1,
+  Ketamine:         5,
   Dexmedetomidine: 10,
 };
 

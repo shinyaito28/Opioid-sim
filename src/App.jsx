@@ -154,6 +154,7 @@ const getModelRequirements = (drug, model) => {
   if (drug === 'Sufentanil') return ['weight'];
   if (drug === 'Propofol') return ['age', 'weight', 'height', 'gender']; // Eleveld uses all four covariates
   if (drug === 'Remimazolam') return ['weight']; // Eleveld 2025 simplified to weight-only here
+  if (drug === 'Ketamine') return ['weight']; // Noppers 2011 allometric W/70
   if (drug === 'Dexmedetomidine') return ['weight']; // Hannivoort 2015 — weight is the only covariate
   return ['weight'];
 };
@@ -173,6 +174,7 @@ const getBestModel = (drug, age) => {
   if (drug === 'Sufentanil') return isPeds ? 'Bartkowska-Sniatkowska (2016) PICU' : 'Gepts (1995) Adult';
   if (drug === 'Propofol') return 'Eleveld (2018) General-purpose'; // Eleveld covers all ages
   if (drug === 'Remimazolam') return 'Eleveld (2025) Adult';
+  if (drug === 'Ketamine') return 'Noppers (2011) S-ketamine';
   if (drug === 'Dexmedetomidine') return 'Hannivoort (2015) Adult';
   return 'Bae (2020) Adult';
 };
@@ -189,6 +191,7 @@ const estimateBolus = (drug, weight) => {
   else if (drug === 'Sufentanil') dose = weight * 0.1;   // 0.1 mcg/kg (cleaner than 0.15)
   else if (drug === 'Propofol') dose = weight * 1.5;     // 1.5 mg/kg (induction)
   else if (drug === 'Remimazolam') dose = weight * 0.1;  // 0.1 mg/kg (induction-like; clinical induction is typically a 1-min infusion of 6-12 mg)
+  else if (drug === 'Ketamine') dose = weight * 0.5;     // 0.5 mg/kg sub-anesthetic (analgesic / induction adjunct)
   else if (drug === 'Dexmedetomidine') dose = weight * 1.0; // 1 mcg/kg loading bolus (over 10 min clinically)
 
   if (dose === 0) return 0;
@@ -1581,6 +1584,7 @@ const App = () => {
                     <optgroup label="Sedatives">
                       <option value="Propofol">Propofol (mg)</option>
                       <option value="Remimazolam">Remimazolam (mg)</option>
+                      <option value="Ketamine">Ketamine (mg, S-form)</option>
                       <option value="Dexmedetomidine">Dexmedetomidine (mcg)</option>
                     </optgroup>
                   </select>
@@ -1621,6 +1625,9 @@ const App = () => {
                     </>}
                     {drug === 'Remimazolam' && <>
                       <option>Eleveld (2025) Adult</option>
+                    </>}
+                    {drug === 'Ketamine' && <>
+                      <option>Noppers (2011) S-ketamine</option>
                     </>}
                     {drug === 'Dexmedetomidine' && <>
                       <option>Hannivoort (2015) Adult</option>
