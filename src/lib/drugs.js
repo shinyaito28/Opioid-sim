@@ -62,6 +62,22 @@ export const THERAPEUTIC_RANGES = {
     bisTarget: { min: 3.0, max: 5.0 }, // mcg/mL — Schnider/Eleveld TCI band for GA
     label: 'BIS target (3.0-5.0 mcg/mL)'
   },
+  'Remimazolam': {
+    // Sedative — 3-comp + effect-site model from Eleveld DJ et al. Br J Anaesth 2025
+    // (PMC12597572, open access). The Eleveld 2025 model is a pooled analysis of 20
+    // studies including Schüttler J et al. Anesthesiology 2020;132:636-651 (PMID:31972655),
+    // so it represents the most comprehensive published Remimazolam PKPD parameters.
+    // CL/Vss values agree with Schüttler 2020 within reported variance (CL 1.12 vs 1.15
+    // L/min) so the simpler Eleveld model is used as primary citation.
+    //
+    // PD anchors verified from Eleveld 2025 PMC text (2026-04-29):
+    //   Ce50 MOAA/S ≤1: 0.182 mcg/mL  → light/moderate sedation transition
+    //   Ce50 BIS:        0.982 mcg/mL → general anesthesia depth
+    // bisTarget below represents the typical Ce range during GA maintenance with
+    // concomitant opioid (TIVA) — between MOAA/S and BIS Ce50.
+    bisTarget: { min: 0.4, max: 0.8 }, // mcg/mL Ce — typical GA maintenance band
+    label: 'GA maintenance Ce 0.4-0.8 mcg/mL (Eleveld 2025)'
+  },
   'Dexmedetomidine': {
     // Sedative — Hannivoort 2015 PK is plasma-only (no PD/effect-site model). The SedationChart
     // therefore displays Cp by default and overlays Cp-based clinical sedation bands sourced from
@@ -93,6 +109,7 @@ export const DRUG_UNITS = {
   'Methadone': ['mg/hr'],
   'Sufentanil': ['mcg/kg/hr', 'mcg/hr'],
   'Propofol': ['mcg/kg/min', 'mg/kg/hr', 'mg/hr'], // typical TCI / clinical infusion units
+  'Remimazolam': ['mg/kg/hr', 'mg/hr'], // GA maintenance 1-2 mg/kg/hr; ICU/sedation lower
   'Dexmedetomidine': ['mcg/kg/hr', 'mcg/hr', 'mcg/kg/min'] // ICU sedation maintenance
 };
 
@@ -104,6 +121,7 @@ export const CLINICAL_DEFAULTS = {
   'Methadone': { bolus: 0.1, rate: 0, duration: 60, unit: 'mg' }, // Bolus: 0.1 mg/kg
   'Sufentanil': { bolus: 0.2, rate: 0.3, duration: 60, unit: 'mcg' }, // Bolus: 0.2 mcg/kg, Rate: 0.3 mcg/kg/hr
   'Propofol': { bolus: 1.5, rate: 100, duration: 60, unit: 'mg' }, // Bolus: 1.5 mg/kg (induction), Rate: 100 mcg/kg/min (GA maintenance)
+  'Remimazolam': { bolus: 0.1, rate: 1.0, duration: 60, unit: 'mg' }, // Bolus: 0.1 mg/kg (sedation/induction proxy), Rate: 1 mg/kg/hr (GA maintenance)
   'Dexmedetomidine': { bolus: 1.0, rate: 0.7, duration: 60, unit: 'mcg' } // Bolus: 1 mcg/kg loading over 10 min, Rate: 0.7 mcg/kg/hr maintenance (ICU range 0.2–1.4)
 };
 
@@ -115,6 +133,7 @@ export const AVAILABLE_MODELS = {
   'Methadone': ['Standard (Adult)'],
   'Sufentanil': ['Gepts (1995) Adult', 'Bartkowska-Sniatkowska (2016) PICU'],
   'Propofol': ['Eleveld (2018) General-purpose'],
+  'Remimazolam': ['Eleveld (2025) Adult'],
   'Dexmedetomidine': ['Hannivoort (2015) Adult']
 };
 
@@ -127,6 +146,7 @@ export const DRUG_SHORT_NAMES = {
   'Methadone': 'Met',
   'Sufentanil': 'Suf',
   'Propofol': 'Prop',
+  'Remimazolam': 'Rmz',
   'Dexmedetomidine': 'Dex'
 };
 
@@ -141,6 +161,7 @@ export const DRUG_COLORS = {
   Hydromorphone: { ce: '#ea580c', cp: '#fdba74' }, // orange
   Methadone:     { ce: '#16a34a', cp: '#86efac' }, // green
   Propofol:      { ce: '#0d9488', cp: '#5eead4' }, // teal — sedative class
+  Remimazolam:   { ce: '#c026d3', cp: '#f0abfc' }, // fuchsia — sedative, distinguishable from teal/indigo/violet
   Dexmedetomidine: { ce: '#4f46e5', cp: '#a5b4fc' }, // indigo — sedative class, distinguishable from Propofol teal
 };
 
@@ -154,6 +175,7 @@ export const DRUG_CLASS = {
   Methadone:     'opioid',
   Sufentanil:    'opioid',
   Propofol:      'sedative',
+  Remimazolam:   'sedative',
   Dexmedetomidine: 'sedative',
 };
 
@@ -174,6 +196,7 @@ export const DRUG_DISPLAY = {
   Methadone:     { unit: 'ng/mL',  divisor: 1 },
   Sufentanil:    { unit: 'ng/mL',  divisor: 1 },
   Propofol:      { unit: 'mcg/mL', divisor: 1000, yDefaultMax: 10, yMaxLimit: 50 },  // BIS target ~3-5 mcg/mL → 10 fits, slider goes up to 50
+  Remimazolam:   { unit: 'mcg/mL', divisor: 1000, yDefaultMax: 2,  yMaxLimit: 5 },   // GA target 0.4-0.8 mcg/mL Ce → 2 fits, peak Cp ~3-5
   Dexmedetomidine: { unit: 'ng/mL', divisor: 1, yDefaultMax: 2, yMaxLimit: 20 },     // Sedation bands 0.2-1.9 ng/mL → 2 fits, slider goes up to 20
 };
 
@@ -183,7 +206,7 @@ export const getDoseUnitForDrug = (drug) => CLINICAL_DEFAULTS[drug]?.unit || 'mc
 
 // Drugs whose user-facing dose is in mg (not mcg). The simulation engine multiplies bolus
 // amounts by 1000 for these so all internal mass quantities are in mcg, giving Cp/Ce in ng/mL.
-const MG_DRUGS = ['Morphine', 'Hydromorphone', 'Methadone', 'Propofol'];
+const MG_DRUGS = ['Morphine', 'Hydromorphone', 'Methadone', 'Propofol', 'Remimazolam'];
 
 export const calculateLBM = (weight, height, gender) => {
   if (!height || !weight) return weight;
@@ -514,6 +537,30 @@ export const getPKParameters = (drug, model, patient) => {
       params.Q3 = 0;
       params.ke0 = 0.15;
     }
+  }
+  // --- REMIMAZOLAM ---
+  else if (drug === 'Remimazolam') {
+    // Reference: Eleveld DJ et al. Br J Anaesth 2025. PMC12597572 (open access).
+    // "Development and analysis of a remimazolam pharmacokinetics and pharmacodynamics model."
+    // Three-compartment + effect-site model from a pooled analysis of 20 studies including
+    // Schüttler J et al. Anesthesiology 2020;132:636-651 (PMID:31972655). All numeric values
+    // verified directly from the Eleveld 2025 PMC full text on 2026-04-29.
+    //
+    // Reference subject: 70-kg adult; allometric exponent 1.0 for V, 0.75 for CL/Q (standard).
+    // ke0 = 0.298 /min selected as the MOAA/S endpoint (more clinically relevant for sedation
+    //   depth than the BIS endpoint ke0 = 0.145 /min, which is also reported in the paper).
+    // Ce50 anchors (not implemented here, see THERAPEUTIC_RANGES.bisTarget for the chart band):
+    //   MOAA/S Ce50 = 0.182 mcg/mL,  BIS Ce50 = 0.982 mcg/mL.
+    // Eleveld 2025 also reports covariate effects (female +16% CL, opioid -14% CL, age, hepatic,
+    // renal, ECMO) — not included here, future enhancement.
+    const wRatio = weight / 70;
+    params.V1 = 4.31 * wRatio;
+    params.V2 = 12.3 * wRatio;
+    params.V3 = 18.6 * wRatio;
+    params.Cl = 1.12  * (wRatio ** 0.75);
+    params.Q2 = 1.45  * (wRatio ** 0.75);
+    params.Q3 = 0.298 * (wRatio ** 0.75);
+    params.ke0 = 0.298;
   }
   // --- DEXMEDETOMIDINE ---
   else if (drug === 'Dexmedetomidine') {

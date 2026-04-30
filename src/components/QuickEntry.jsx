@@ -14,6 +14,7 @@ const DRUG_DOSE_STEPS = {
   Methadone:     0.5,
   Sufentanil:    5,
   Propofol:      10,
+  Remimazolam:   1,  // typical induction bolus 5-12 mg → ±1 mg increments
   Dexmedetomidine: 10, // typical loading bolus increments — 70 kg adult = 1 mcg/kg ≈ 70 mcg
 };
 
