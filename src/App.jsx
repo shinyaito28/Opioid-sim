@@ -241,6 +241,12 @@ const App = () => {
   // mode (Update / Delete buttons) instead of the default Add mode.
   const [chartPopover, setChartPopover] = useState({ open: false, x: 0, y: 0, minute: 0, editingEventId: null });
   const chartWrapperRef = useRef(null);
+  // Phase 5-H-4: drag-to-reschedule. dragStateRef carries drag-in-progress info between
+  // pointer events without triggering re-renders; dragEndTimeRef is a timestamp the
+  // existing onClick / onTouchEnd handlers consult to suppress a popover that would
+  // otherwise open on the click that follows a drag release.
+  const dragStateRef = useRef(null);
+  const dragEndTimeRef = useRef(0);
 
   const [simDuration, setSimDuration] = useState(120);
   const [maxTimeScale, setMaxTimeScale] = useState(720);
@@ -784,6 +790,83 @@ const App = () => {
     setEvents((prev) => prev.filter((ev) => ev.id !== eventId));
   };
 
+  // Phase 5-H-4: time-only event update used by drag-to-reschedule. Skips the unit
+  // conversion in handleEventUpdate (rate stays in standard unit) — only the time
+  // changes, so the simulation engine sees an otherwise-identical event.
+  const handleEventTimeChange = (eventId, newTime) => {
+    setEvents((prev) => prev.map((ev) =>
+      ev.id === eventId ? { ...ev, time: newTime } : ev
+    ));
+  };
+
+  // Phase 5-H-4: drag-to-reschedule on the main chart.
+  // Pointer Events unify mouse + touch. The chart wrapper claims pointer capture on
+  // pointerdown so subsequent moves/up are guaranteed to land here even if the
+  // pointer drifts off the chart. We hit-test by reusing findEventNearMinute on the
+  // px→minute conversion that already powers the iOS touch fallback. Live updates
+  // call setEvents on each pointermove; Recharts re-renders the marker and curves.
+  const DRAG_THRESHOLD_PX = 5;
+  const SUPPRESS_CLICK_MS = 500;
+  const pxToMinuteMain = (xPx, rectWidth) => {
+    const PLOT_LEFT = 60;
+    const PLOT_RIGHT_OFFSET = 10 + (activeDrugs.size > 0 ? 40 : 0);
+    if (xPx < PLOT_LEFT || xPx > rectWidth - PLOT_RIGHT_OFFSET) return null;
+    const xRatio = (xPx - PLOT_LEFT) / (rectWidth - PLOT_LEFT - PLOT_RIGHT_OFFSET);
+    return Math.max(0, Math.min(simDuration, Math.round(xRatio * simDuration)));
+  };
+  const onChartPointerDown = (e) => {
+    const rect = chartWrapperRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = e.clientX - rect.left;
+    const minute = pxToMinuteMain(x, rect.width);
+    if (minute === null) return;
+    const nearby = findEventNearMinute(events, minute);
+    if (!nearby) return;
+    dragStateRef.current = {
+      eventId: nearby.id,
+      pointerId: e.pointerId,
+      startX: x,
+      startMinute: minute,
+      originalTime: nearby.time,
+      didDrag: false,
+    };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+  };
+  const onChartPointerMove = (e) => {
+    const ds = dragStateRef.current;
+    if (!ds || ds.pointerId !== e.pointerId) return;
+    const rect = chartWrapperRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = e.clientX - rect.left;
+    if (!ds.didDrag) {
+      if (Math.abs(x - ds.startX) < DRAG_THRESHOLD_PX) return;
+      ds.didDrag = true;
+    }
+    const currentMinute = pxToMinuteMain(x, rect.width);
+    if (currentMinute === null) return;
+    const newTime = Math.max(0, Math.min(simDuration, ds.originalTime + (currentMinute - ds.startMinute)));
+    setEvents((prev) => prev.map((ev) =>
+      ev.id === ds.eventId ? { ...ev, time: newTime } : ev
+    ));
+  };
+  const onChartPointerUp = (e) => {
+    const ds = dragStateRef.current;
+    if (!ds || ds.pointerId !== e.pointerId) return;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
+    if (ds.didDrag) dragEndTimeRef.current = Date.now();
+    dragStateRef.current = null;
+  };
+  const onChartPointerCancel = (e) => {
+    const ds = dragStateRef.current;
+    if (!ds || ds.pointerId !== e.pointerId) return;
+    if (ds.didDrag) {
+      setEvents((prev) => prev.map((ev) =>
+        ev.id === ds.eventId ? { ...ev, time: ds.originalTime } : ev
+      ));
+    }
+    dragStateRef.current = null;
+  };
+
   // Phase 5-C: drug switch is now non-destructive — events stay because they're tagged per-drug,
   // and savedTraces from other drugs are no longer dropped. We only reset the detail-edit form's
   // defaults so it makes sense for the newly selected drug.
@@ -1165,9 +1248,17 @@ const App = () => {
           </div>
 
           <div
-            className="h-[400px] w-full relative cursor-pointer touch-manipulation"
+            className="h-[400px] w-full relative cursor-pointer"
+            style={{ touchAction: 'pan-y' }}
             ref={chartWrapperRef}
+            onPointerDown={onChartPointerDown}
+            onPointerMove={onChartPointerMove}
+            onPointerUp={onChartPointerUp}
+            onPointerCancel={onChartPointerCancel}
             onTouchEnd={(e) => {
+              // Phase 5-H-4: a drag that just ended would otherwise re-open the popover
+              // via this iOS fallback or the Recharts onClick below — suppress for 500ms.
+              if (Date.now() - dragEndTimeRef.current < SUPPRESS_CLICK_MS) return;
               // iOS Safari fallback: Recharts' SVG onClick is unreliable on touch.
               // Decode the tap location → minute manually using approximate plot-area
               // boundaries (left YAxis ~60, right Burden ~40 when active + 10 margin).
@@ -1191,6 +1282,8 @@ const App = () => {
               <LineChart
                 margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
                 onClick={(e) => {
+                  // Phase 5-H-4: suppress the click that follows a drag release.
+                  if (Date.now() - dragEndTimeRef.current < SUPPRESS_CLICK_MS) return;
                   if (e && e.activeLabel != null && e.chartX != null && e.chartY != null) {
                     const minute = Math.max(0, Math.round(Number(e.activeLabel)));
                     const nearbyEvent = findEventNearMinute(events, minute);
@@ -1516,6 +1609,7 @@ const App = () => {
                   quickAddInfusion={quickAddInfusion}
                   onUpdate={handleEventUpdate}
                   onDelete={handleEventDelete}
+                  onEventTimeChange={handleEventTimeChange}
                 />
               ))}
             </div>

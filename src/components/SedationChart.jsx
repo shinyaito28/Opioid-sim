@@ -137,6 +137,9 @@ export default function SedationChart({
   // event marker opens the popover in edit mode with Update/Delete buttons.
   onUpdate,
   onDelete,
+  // Phase 5-H-4: drag-to-reschedule. Receives (eventId, newTime) and updates the parent's
+  // events array. Drag is enabled only when this prop is supplied.
+  onEventTimeChange,
 }) {
   const { t } = useTranslation();
   const range = THERAPEUTIC_RANGES[drug] || {};
@@ -161,6 +164,75 @@ export default function SedationChart({
   const [popover, setPopover] = useState({ open: false, x: 0, y: 0, minute: 0, editingEventId: null });
   const chartAreaRef = useRef(null);
   const clickEnabled = typeof quickAddBolus === 'function' && typeof quickAddInfusion === 'function';
+  // Phase 5-H-4: drag-to-reschedule on this mini chart. Same pattern as the main chart in
+  // App.jsx — the px→minute conversion uses a fixed PLOT_RIGHT_OFFSET=50 because there is
+  // no Burden axis here. Live updates flow through onEventTimeChange.
+  const dragEnabled = typeof onEventTimeChange === 'function';
+  const dragStateRef = useRef(null);
+  const dragEndTimeRef = useRef(0);
+  const DRAG_THRESHOLD_PX = 5;
+  const SUPPRESS_CLICK_MS = 500;
+  const pxToMinuteSed = (xPx, rectWidth) => {
+    const PLOT_LEFT = 60;
+    const PLOT_RIGHT_OFFSET = 50;
+    if (xPx < PLOT_LEFT || xPx > rectWidth - PLOT_RIGHT_OFFSET) return null;
+    const xRatio = (xPx - PLOT_LEFT) / (rectWidth - PLOT_LEFT - PLOT_RIGHT_OFFSET);
+    return Math.max(0, Math.min(simDuration, Math.round(xRatio * simDuration)));
+  };
+  const onChartPointerDown = (e) => {
+    if (!dragEnabled) return;
+    const rect = chartAreaRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = e.clientX - rect.left;
+    const minute = pxToMinuteSed(x, rect.width);
+    if (minute === null) return;
+    const nearby = events.find((ev) => {
+      if (ev.type === 'bolus') return Math.abs(ev.time - minute) <= 1;
+      if (ev.type === 'infusion') {
+        const endTime = ev.isInfinite ? simDuration : ev.time + ev.duration;
+        return minute >= ev.time - 1 && minute <= endTime + 1;
+      }
+      return false;
+    });
+    if (!nearby) return;
+    dragStateRef.current = {
+      eventId: nearby.id,
+      pointerId: e.pointerId,
+      startX: x,
+      startMinute: minute,
+      originalTime: nearby.time,
+      didDrag: false,
+    };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+  };
+  const onChartPointerMove = (e) => {
+    const ds = dragStateRef.current;
+    if (!ds || ds.pointerId !== e.pointerId) return;
+    const rect = chartAreaRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = e.clientX - rect.left;
+    if (!ds.didDrag) {
+      if (Math.abs(x - ds.startX) < DRAG_THRESHOLD_PX) return;
+      ds.didDrag = true;
+    }
+    const currentMinute = pxToMinuteSed(x, rect.width);
+    if (currentMinute === null) return;
+    const newTime = Math.max(0, Math.min(simDuration, ds.originalTime + (currentMinute - ds.startMinute)));
+    onEventTimeChange(ds.eventId, newTime);
+  };
+  const onChartPointerUp = (e) => {
+    const ds = dragStateRef.current;
+    if (!ds || ds.pointerId !== e.pointerId) return;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
+    if (ds.didDrag) dragEndTimeRef.current = Date.now();
+    dragStateRef.current = null;
+  };
+  const onChartPointerCancel = (e) => {
+    const ds = dragStateRef.current;
+    if (!ds || ds.pointerId !== e.pointerId) return;
+    if (ds.didDrag && dragEnabled) onEventTimeChange(ds.eventId, ds.originalTime);
+    dragStateRef.current = null;
+  };
 
   // Phase 5-H-3 (B): find an existing event near the clicked minute. The events array passed
   // to this chart is already drug-filtered upstream, so no extra filter needed here.
@@ -272,8 +344,15 @@ export default function SedationChart({
 
       <div
         ref={chartAreaRef}
-        className={`h-[160px] w-full relative ${clickEnabled ? 'cursor-pointer touch-manipulation' : ''}`}
+        className={`h-[160px] w-full relative ${clickEnabled ? 'cursor-pointer' : ''}`}
+        style={dragEnabled || clickEnabled ? { touchAction: 'pan-y' } : undefined}
+        onPointerDown={dragEnabled ? onChartPointerDown : undefined}
+        onPointerMove={dragEnabled ? onChartPointerMove : undefined}
+        onPointerUp={dragEnabled ? onChartPointerUp : undefined}
+        onPointerCancel={dragEnabled ? onChartPointerCancel : undefined}
         onTouchEnd={clickEnabled ? (e) => {
+          // Phase 5-H-4: suppress the click that follows a drag release.
+          if (Date.now() - dragEndTimeRef.current < SUPPRESS_CLICK_MS) return;
           // iOS Safari fallback — Recharts onClick is unreliable on touch.
           if (popover.open) return;
           if (!e.changedTouches || e.changedTouches.length === 0) return;
@@ -297,6 +376,8 @@ export default function SedationChart({
             data={displaySim}
             margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
             onClick={clickEnabled ? (e) => {
+              // Phase 5-H-4: suppress the click that follows a drag release.
+              if (Date.now() - dragEndTimeRef.current < SUPPRESS_CLICK_MS) return;
               if (e && e.activeLabel != null && e.chartX != null && e.chartY != null) {
                 const minute = Math.max(0, Math.round(Number(e.activeLabel)));
                 const nearbyEvent = findEventNearMinute(minute);
