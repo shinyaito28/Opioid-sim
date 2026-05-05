@@ -101,5 +101,13 @@
     "burdenTherapeutic": "Therapeutic AUC",
     "burdenSupra": "Supratherapeutic AUC",
     "burdenCurveToggle": "Show risk curve",
-    "burdenTooltip": "Opioid burden = cumulative opioid exposure over time. Total AUC is the area under the effect-site concentration curve (∫Ce dt). Therapeutic AUC counts exposure within the analgesic band; Supratherapeutic is the area above the upper analgesic threshold. The right-axis dashed curve shows the **instantaneous** respiratory-risk index Σ(Ce/RespC50) — a different concept from AUC. Both are shown so you can read live risk and cumulative load at the same time."
+    "burdenTooltip": "Opioid burden = cumulative opioid exposure over time. Total AUC is the area under the effect-site concentration curve (∫Ce dt). Therapeutic AUC counts exposure within the analgesic band; Supratherapeutic is the area above the upper analgesic threshold. The right-axis dashed curve shows the **instantaneous** respiratory-risk index Σ(Ce/RespC50) — a different concept from AUC. Both are shown so you can read live risk and cumulative load at the same time.",
+    "xAxisMin": "X min",
+    "xAxisMinTooltip": "X-axis lower bound (minutes from sim start)",
+    "xAxisMax": "X max",
+    "resetDisplay": "Reset",
+    "resetDisplayTooltip": "Reset axes / time-zero / display modes to defaults (events and patient unchanged)",
+    "rangeLabel": "Range:",
+    "customRange": "CUSTOM",
+    "rangeRevertTooltip": "Revert to literature default"
 }

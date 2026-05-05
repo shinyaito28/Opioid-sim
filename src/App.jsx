@@ -284,6 +284,14 @@ const App = () => {
   // and burden-info expander (definition explainer). Curve defaults visible.
   const [showBurdenCurve, setShowBurdenCurve] = useState(true);
   const [showBurdenInfo, setShowBurdenInfo] = useState(false);
+  // Phase 5-J-4: X-axis lower bound (display only; data isn't trimmed). Default 0.
+  // Combined with simDuration this gives the full chart-window. Negative values are
+  // sometimes useful with timeZeroMinute for showing pre-event minutes.
+  const [xAxisMin, setXAxisMin] = useState(0);
+  // Phase 5-J-4: per-drug therapeutic-range overrides. Empty object = use literature
+  // defaults from THERAPEUTIC_RANGES. Override only the analgesia band (analgesiaMin,
+  // analgesiaMax); respiratoryRisk stays literature-based since it is a safety value.
+  const [therapeuticOverrides, setTherapeuticOverrides] = useState({});
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
@@ -427,14 +435,15 @@ const App = () => {
     for (const d of activeOpioids) {
       const sim = simByDrug.get(d);
       if (!sim?.length) continue;
-      const range = THERAPEUTIC_RANGES[d];
+      // Phase 5-J-4: honour per-drug therapeutic overrides for the AUC band-clipping.
+      const range = { ...THERAPEUTIC_RANGES[d], ...(therapeuticOverrides[d] || {}) };
       const auc = computeBurdenAUC(sim, range);
       total += auc.total;
       therapeutic += auc.therapeutic;
       supra += auc.supra;
     }
     return { total, therapeutic, supra };
-  }, [simByDrug, activeOpioids]);
+  }, [simByDrug, activeOpioids, therapeuticOverrides]);
 
   const activeParams = useMemo(() => getModelRequirements(drug, model), [drug, model]);
 
@@ -1163,7 +1172,15 @@ const App = () => {
 
 
   const getDoseUnit = () => CLINICAL_DEFAULTS[drug]?.unit || 'mcg';
-  const currentRange = THERAPEUTIC_RANGES[drug];
+  // Phase 5-J-4: literature-default range, possibly overridden per-drug. The
+  // overrides only affect the displayed band + AUC band-clipping; respiratoryRisk
+  // is literature-only by design.
+  const currentRange = useMemo(() => {
+    const def = THERAPEUTIC_RANGES[drug];
+    const ov = therapeuticOverrides[drug];
+    if (!ov) return def;
+    return { ...def, ...ov };
+  }, [drug, therapeuticOverrides]);
 
   const handleScaleChange = (newMax) => {
     setMaxTimeScale(newMax);
@@ -1347,6 +1364,51 @@ const App = () => {
               </span>
             </div>
 
+            {/* Phase 5-J-4: inline therapeutic-range override (analgesia band only) for the
+                current opioid. Shown only when the drug declares an analgesia band, so it
+                stays out of the way for sedatives. respiratoryRisk is intentionally NOT
+                editable — it's a safety value that should track literature. */}
+            {currentRange?.analgesiaMin != null && currentRange?.analgesiaMax != null && (
+              <div className="flex items-center gap-1 text-[11px]">
+                <span className="text-slate-500 dark:text-slate-400 whitespace-nowrap">{t('rangeLabel')}</span>
+                <input
+                  type="number" step="0.1" min="0"
+                  value={currentRange.analgesiaMin}
+                  onChange={(e) => setTherapeuticOverrides((prev) => ({
+                    ...prev,
+                    [drug]: { ...(prev[drug] || {}), analgesiaMin: Number(e.target.value), analgesiaMax: prev[drug]?.analgesiaMax ?? currentRange.analgesiaMax },
+                  }))}
+                  className="w-12 text-right border border-slate-300 dark:border-slate-600 rounded p-0.5 font-mono bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                />
+                <span className="text-slate-400">—</span>
+                <input
+                  type="number" step="0.1" min="0"
+                  value={currentRange.analgesiaMax}
+                  onChange={(e) => setTherapeuticOverrides((prev) => ({
+                    ...prev,
+                    [drug]: { ...(prev[drug] || {}), analgesiaMax: Number(e.target.value), analgesiaMin: prev[drug]?.analgesiaMin ?? currentRange.analgesiaMin },
+                  }))}
+                  className="w-12 text-right border border-slate-300 dark:border-slate-600 rounded p-0.5 font-mono bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                />
+                {therapeuticOverrides[drug] && (
+                  <>
+                    <button
+                      onClick={() => setTherapeuticOverrides((prev) => {
+                        const next = { ...prev };
+                        delete next[drug];
+                        return next;
+                      })}
+                      className="text-slate-500 dark:text-slate-400 hover:text-blue-600 p-0.5"
+                      title={t('rangeRevertTooltip')}
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </button>
+                    <span className="text-amber-700 dark:text-amber-300 text-[9px] font-bold">{t('customRange')}</span>
+                  </>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2">
               <button
                 onClick={saveCurrentTrace}
@@ -1436,7 +1498,7 @@ const App = () => {
                 <XAxis
                   dataKey="time"
                   type="number"
-                  domain={[0, simDuration]}
+                  domain={[xAxisMin, simDuration]}
                   tickCount={10}
                   allowDataOverflow
                   tickFormatter={(val) => isClockMode ? minutesToTime(val, startTime) : (timeZeroMinute > 0 ? (val - timeZeroMinute) : val)}
@@ -1851,16 +1913,54 @@ const App = () => {
                 className="w-20 md:w-32 accent-slate-600"
               />
 
-              <div className="relative">
+              {/* Phase 5-J-4: explicit X-min input. Default 0; negative useful only with
+                  timeZeroMinute (e.g. show -30..+90 around an event). */}
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400">{t('xAxisMin')}</span>
+                <input
+                  type="number"
+                  min="-1440"
+                  max={Math.max(0, simDuration - 30)}
+                  value={xAxisMin}
+                  onChange={(e) => setXAxisMin(Number(e.target.value))}
+                  className="w-14 text-right text-xs border border-slate-300 dark:border-slate-600 rounded p-1 font-mono focus:ring-1 focus:ring-blue-400 outline-none bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                  title={t('xAxisMinTooltip')}
+                />
+              </div>
+
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400">{t('xAxisMax')}</span>
                 <input
                   type="number"
                   min="10"
                   max="2880"
                   value={simDuration}
                   onChange={(e) => setSimDuration(Number(e.target.value))}
-                  className="w-16 text-right text-xs border border-slate-300 dark:border-slate-600 rounded p-1 pr-1 font-mono focus:ring-1 focus:ring-blue-400 outline-none"
+                  className="w-16 text-right text-xs border border-slate-300 dark:border-slate-600 rounded p-1 pr-1 font-mono focus:ring-1 focus:ring-blue-400 outline-none bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
                 />
               </div>
+
+              {/* Phase 5-J-4: master display reset — restores axes / time-zero / mode /
+                  burden visibility / therapeutic overrides. Does NOT touch events,
+                  patient, or drug selection. */}
+              <button
+                onClick={() => {
+                  setYAxisMode('therapeutic');
+                  setYAxisMax(6);
+                  setXAxisMin(0);
+                  setSimDuration(120);
+                  setMaxTimeScale(720);
+                  setTimeZeroMinute(0);
+                  setShowBurdenCurve(true);
+                  setShowBurdenInfo(false);
+                  setTherapeuticOverrides({});
+                }}
+                className="text-[10px] px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 flex items-center gap-1"
+                title={t('resetDisplayTooltip')}
+              >
+                <RotateCcw className="w-3 h-3" />
+                {t('resetDisplay')}
+              </button>
             </div>
           </div >
 

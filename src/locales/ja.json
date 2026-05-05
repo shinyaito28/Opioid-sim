@@ -101,5 +101,13 @@
     "burdenTherapeutic": "治療域 AUC",
     "burdenSupra": "治療域超過 AUC",
     "burdenCurveToggle": "リスク曲線表示",
-    "burdenTooltip": "オピオイド曝露量 = 時間累積の曝露指標。Total AUC は効果部位濃度曲線下面積 (∫Ce dt)。Therapeutic AUC は鎮痛帯内、Supratherapeutic は鎮痛上限を超えた部分の面積。右軸の点線は**瞬間**呼吸抑制リスク指標 Σ(Ce/RespC50) で AUC とは別概念。両者を同時に併記し、瞬間リスクと累積負荷の両面が読めるようにしている。"
+    "burdenTooltip": "オピオイド曝露量 = 時間累積の曝露指標。Total AUC は効果部位濃度曲線下面積 (∫Ce dt)。Therapeutic AUC は鎮痛帯内、Supratherapeutic は鎮痛上限を超えた部分の面積。右軸の点線は**瞬間**呼吸抑制リスク指標 Σ(Ce/RespC50) で AUC とは別概念。両者を同時に併記し、瞬間リスクと累積負荷の両面が読めるようにしている。",
+    "xAxisMin": "X 最小",
+    "xAxisMinTooltip": "X 軸の下端 (シミュレーション開始からの分)",
+    "xAxisMax": "X 最大",
+    "resetDisplay": "リセット",
+    "resetDisplayTooltip": "軸・時間原点・表示モードを初期値に戻す（投与と患者は不変）",
+    "rangeLabel": "鎮痛帯:",
+    "customRange": "手動",
+    "rangeRevertTooltip": "文献値に戻す"
 }
