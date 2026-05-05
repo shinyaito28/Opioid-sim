@@ -88,5 +88,9 @@
     "optgroupOpioids": "オピオイド",
     "optgroupSedatives": "鎮静薬",
     "modelDescAdult": "成人",
-    "modelDescPediatric": "小児"
+    "modelDescPediatric": "小児",
+    "yModeFull": "全範囲",
+    "yModeTherapeutic": "治療域",
+    "yModeCustom": "手動",
+    "peakExceedsRange": "↑ ピーク {{value}} {{unit}} @ {{time}}分 — 表示範囲外"
 }

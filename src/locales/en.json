@@ -88,5 +88,9 @@
     "optgroupOpioids": "Opioids",
     "optgroupSedatives": "Sedatives",
     "modelDescAdult": "Adult",
-    "modelDescPediatric": "Pediatric"
+    "modelDescPediatric": "Pediatric",
+    "yModeFull": "Full",
+    "yModeTherapeutic": "Therapeutic",
+    "yModeCustom": "Custom",
+    "peakExceedsRange": "↑ Peak {{value}} {{unit}} @ {{time}}min — exceeds visible range"
 }

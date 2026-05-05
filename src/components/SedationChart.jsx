@@ -155,14 +155,48 @@ export default function SedationChart({
   const cpOnlyDefault = (!!range.sedationBands && !range.bisTarget) || !!disabledCe;
   const yDefaultMax = DRUG_DISPLAY[drug]?.yDefaultMax || 10;
   const yMaxLimit = DRUG_DISPLAY[drug]?.yMaxLimit || 50;
+  // Hoisted up from below so Phase 5-J-1 yAxisInfo can use it for data-peak scaling.
+  const divisor = DRUG_DISPLAY[drug]?.divisor || 1;
 
   // Advanced toggle is per-drug-instance state. Shown only when the drug declares an advancedKe0.
   const [showAdvancedCe, setShowAdvancedCe] = useState(false);
-  // Y-axis zoom — Auto follows data, otherwise clamp to yMax (display units). Sqrt mapping in the
-  // slider gives fine PD-range resolution (0.1-2 ng/mL) while still reaching PK-range peaks.
-  const [yAuto, setYAuto] = useState(true);
+  // Phase 5-J-1: Y-axis display mode. 'therapeutic' default keeps the bisTarget /
+  // sedationBands visible regardless of PK peak; 'full' is data-peak fit; 'custom'
+  // honours the slider value below. Sqrt-mapped slider gives fine PD-range resolution.
+  const [yMode, setYMode] = useState('therapeutic'); // 'full' | 'therapeutic' | 'custom'
   const [yMax, setYMax] = useState(yDefaultMax);
   const sliderMax = Math.round(Math.sqrt(yMaxLimit) * 10);
+
+  // Phase 5-J-1: data peak + Y-axis effective max (in display units, after divisor).
+  // 'therapeutic' keeps bisTarget.max or sedationBands top visible; 'full' fits the
+  // data peak; 'custom' honours the slider value.
+  const yAxisInfo = useMemo(() => {
+    let dataPeak = 0;
+    let peakTime = 0;
+    if (sim?.length) {
+      for (const point of sim) {
+        const v = (point.ce ?? point.cp ?? 0) / divisor;
+        if (v > dataPeak) { dataPeak = v; peakTime = point.time; }
+      }
+    }
+    let yMaxLocal;
+    if (yMode === 'custom') {
+      yMaxLocal = yMax;
+    } else if (yMode === 'full') {
+      yMaxLocal = dataPeak <= 0 ? yDefaultMax : Math.ceil(dataPeak * 1.2 * 10) / 10;
+    } else if (range?.bisTarget?.max) {
+      yMaxLocal = Math.max(range.bisTarget.max * 1.5, 1);
+    } else if (range?.sedationBands?.length) {
+      const upper = Math.max(...range.sedationBands.map((b) => b.max));
+      yMaxLocal = Math.max(upper * 1.2, 1);
+    } else if (range?.experimentalReferenceLine?.value) {
+      yMaxLocal = Math.max(range.experimentalReferenceLine.value * 1.2 / divisor, 1);
+    } else {
+      yMaxLocal = dataPeak <= 0 ? yDefaultMax : Math.ceil(dataPeak * 1.2 * 10) / 10;
+    }
+    return { yMaxEffective: yMaxLocal, dataPeak, peakTime };
+  }, [yMode, yMax, sim, divisor, range, yDefaultMax]);
+  const yMaxEffective = yAxisInfo.yMaxEffective;
 
   // Phase 5-H-2: chart-click popover anchored to the mini chart container.
   // Phase 5-H-3 (B) added editingEventId for edit-mode popover.
@@ -293,7 +327,7 @@ export default function SedationChart({
   const colors = DRUG_COLORS[drug] || { ce: '#0d9488', cp: '#5eead4' };
   const shortName = DRUG_SHORT_NAMES[drug] || drug;
   const displayUnit = DRUG_DISPLAY[drug]?.unit || 'ng/mL';
-  const divisor = DRUG_DISPLAY[drug]?.divisor || 1;
+  // (divisor declared earlier so yAxisInfo can use it.)
 
   // Step 1: scale internal ng/mL to display unit (e.g., Propofol mcg/mL).
   const scaledSim = useMemo(() => (
@@ -325,15 +359,15 @@ export default function SedationChart({
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1.5">
             <ZoomIn className="w-3 h-3 text-slate-500 dark:text-slate-400 dark:text-slate-500" />
-            <label className="flex items-center gap-1 text-[10px] cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={yAuto}
-                onChange={(e) => setYAuto(e.target.checked)}
-                className="accent-blue-600 rounded w-3 h-3"
-              />
-              <span>{t('autoY')}</span>
-            </label>
+            <select
+              value={yMode}
+              onChange={(e) => setYMode(e.target.value)}
+              className="text-[10px] border border-slate-300 dark:border-slate-600 rounded px-1 py-0.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+            >
+              <option value="full">{t('yModeFull')}</option>
+              <option value="therapeutic">{t('yModeTherapeutic')}</option>
+              <option value="custom">{t('yModeCustom')}</option>
+            </select>
             <input
               type="range"
               min="1"
@@ -343,13 +377,13 @@ export default function SedationChart({
               onChange={(e) => {
                 const val = Number(e.target.value);
                 const newMax = (val / 10) ** 2;
-                setYMax(Math.round(newMax * 100) / 100); // 2 decimal places for fine PD tuning
-                setYAuto(false);
+                setYMax(Math.round(newMax * 100) / 100);
+                setYMode('custom');
               }}
-              className={`w-20 md:w-24 accent-pink-500 ${yAuto ? 'opacity-50' : 'opacity-100'}`}
+              className={`w-20 md:w-24 accent-pink-500 ${yMode === 'custom' ? 'opacity-100' : 'opacity-50'}`}
             />
             <span className="text-[10px] font-mono w-16 text-right text-slate-600 dark:text-slate-300 tabular-nums">
-              {yAuto ? t('autoY') : `${yMax} ${displayUnit}`}
+              {yMode === 'custom' ? `${yMax} ${displayUnit}` : `${yMaxEffective.toFixed(yMaxEffective < 10 ? 1 : 0)} ${displayUnit}`}
             </span>
           </div>
           {advancedKe0 && (
@@ -414,6 +448,12 @@ export default function SedationChart({
           setPopover({ open: true, x, y, minute, editingEventId: nearbyEvent?.id ?? null });
         } : undefined}
       >
+        {/* Phase 5-J-1: peak-exceeds indicator for the mini chart. */}
+        {yAxisInfo.dataPeak > yMaxEffective && yAxisInfo.dataPeak > 0 && (
+          <div className="absolute top-1 left-16 z-10 text-[9px] font-mono bg-amber-50 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 rounded px-1 py-0 pointer-events-none">
+            {t('peakExceedsRange', { value: yAxisInfo.dataPeak.toFixed(1), unit: displayUnit, time: yAxisInfo.peakTime })}
+          </div>
+        )}
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={displaySim}
@@ -447,8 +487,8 @@ export default function SedationChart({
             />
             <YAxis
               yAxisId="left"
-              domain={[0, yAuto ? 'auto' : yMax]}
-              allowDataOverflow={!yAuto}
+              domain={[0, yMaxEffective]}
+              allowDataOverflow={true}
               label={{ value: `Conc (${displayUnit})`, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: chartColors?.axisStroke } }}
               fontSize={10}
               stroke={chartColors?.axisStroke}

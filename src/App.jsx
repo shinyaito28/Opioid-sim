@@ -266,7 +266,10 @@ const App = () => {
   const [lastDoseByDrug, setLastDoseByDrug] = useState({});
   const [showRanges, setShowRanges] = useState(true);
   const [yAxisMax, setYAxisMax] = useState(6);
-  const [isAutoY, setIsAutoY] = useState(true);
+  // Phase 5-J-1: Y-axis display mode. 'therapeutic' is the new default — keeps the
+  // analgesic band and respiratory-risk threshold visible regardless of PK peak. 'full'
+  // is the previous data-peak auto-fit; 'custom' uses the yAxisMax slider/input.
+  const [yAxisMode, setYAxisMode] = useState('therapeutic'); // 'full' | 'therapeutic' | 'custom'
   const [isClockMode, setIsClockMode] = useState(false);
   const [startTime, setStartTime] = useState("09:00");
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -569,25 +572,55 @@ const App = () => {
   // MOVED DRUG DEFAULT LOGIC TO handleDrugChange TO ENABLE PERSISTENCE
 
 
-  // --- CALCULATE AUTO Y MAX (across all active drugs) ---
-  const calculatedYMax = useMemo(() => {
-    if (!isAutoY) return yAxisMax;
-    let maxCe = 0;
+  // Phase 5-J-1: Y-axis domain computation across 3 modes. Also exposes the data peak
+  // (and the time it occurred) so the chart can render an "exceeds visible range"
+  // indicator when therapeutic / custom modes clip the peak from view.
+  // - 'full'        → previous behaviour (peak * 1.2, with 5 ng/mL floor)
+  // - 'therapeutic' → keep analgesia band + respiratory-risk line visible regardless
+  //                   of PK peak. Drug-class aware (opioids / bisTarget / sedationBands).
+  // - 'custom'      → user-set yAxisMax slider value
+  const yAxisInfo = useMemo(() => {
+    let dataPeak = 0;
+    let peakTime = 0;
     for (const sim of simByDrug.values()) {
-      if (sim.length > 0) {
-        const m = Math.max(...sim.map((d) => d.ce));
-        if (m > maxCe) maxCe = m;
+      if (sim.length === 0) continue;
+      for (const point of sim) {
+        if ((point.ce ?? 0) > dataPeak) {
+          dataPeak = point.ce;
+          peakTime = point.time;
+        }
       }
     }
     savedTraces.forEach((trace) => {
-      if (trace.data && trace.data.length > 0) {
-        const traceMax = Math.max(...trace.data.map((d) => d.ce));
-        if (traceMax > maxCe) maxCe = traceMax;
+      if (!trace.data?.length) return;
+      for (const point of trace.data) {
+        if ((point.ce ?? 0) > dataPeak) {
+          dataPeak = point.ce;
+          peakTime = point.time;
+        }
       }
     });
-    if (maxCe <= 0) return 5;
-    return Math.ceil(maxCe * 1.2);
-  }, [isAutoY, yAxisMax, simByDrug, savedTraces]);
+
+    const range = THERAPEUTIC_RANGES[drug];
+    let calculatedYMaxLocal;
+    if (yAxisMode === 'custom') {
+      calculatedYMaxLocal = yAxisMax;
+    } else if (yAxisMode === 'full') {
+      calculatedYMaxLocal = dataPeak <= 0 ? 5 : Math.ceil(dataPeak * 1.2);
+    } else if (range?.respiratoryRisk) {
+      calculatedYMaxLocal = Math.max(range.respiratoryRisk * 1.3, 5);
+    } else if (range?.bisTarget?.max) {
+      calculatedYMaxLocal = Math.max(range.bisTarget.max * 1.5, 5);
+    } else if (range?.sedationBands?.length) {
+      const upper = Math.max(...range.sedationBands.map((b) => b.max));
+      calculatedYMaxLocal = Math.max(upper * 1.2, 1);
+    } else {
+      calculatedYMaxLocal = dataPeak <= 0 ? 5 : Math.ceil(dataPeak * 1.2);
+    }
+    return { calculatedYMax: calculatedYMaxLocal, dataPeak, peakTime };
+  }, [yAxisMode, yAxisMax, drug, simByDrug, savedTraces]);
+
+  const calculatedYMax = yAxisInfo.calculatedYMax;
 
 
   // --- HANDLERS ---
@@ -1252,20 +1285,21 @@ const App = () => {
               </p>
             </div>
 
-            {/* Y-axis controls — same Auto + sqrt-slider pattern as SedationChart for visual
-                consistency. Moved here from the bottom Axis Controls strip so chart-display
-                concerns sit on the chart card and time-scope concerns sit on their own row. */}
+            {/* Phase 5-J-1: Y-axis controls. Mode select replaces the binary Auto Y checkbox
+                so users can pick between Full (data-peak fit), Therapeutic (band-priority
+                default), or Custom (slider-driven). Slider stays visible but disabled outside
+                Custom so the relationship between control and effect is obvious. */}
             <div className="flex items-center gap-1.5">
               <ZoomIn className="w-3 h-3 text-slate-500 dark:text-slate-400 dark:text-slate-500" />
-              <label className="flex items-center gap-1 text-[11px] cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={isAutoY}
-                  onChange={(e) => setIsAutoY(e.target.checked)}
-                  className="accent-blue-600 rounded w-3 h-3"
-                />
-                <span>{t('autoY')}</span>
-              </label>
+              <select
+                value={yAxisMode}
+                onChange={(e) => setYAxisMode(e.target.value)}
+                className="text-[11px] border border-slate-300 dark:border-slate-600 rounded px-1 py-0.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+              >
+                <option value="full">{t('yModeFull')}</option>
+                <option value="therapeutic">{t('yModeTherapeutic')}</option>
+                <option value="custom">{t('yModeCustom')}</option>
+              </select>
               <input
                 type="range" min="1" max="150" step="1"
                 value={Math.sqrt(yAxisMax) * 10}
@@ -1273,12 +1307,12 @@ const App = () => {
                   const val = Number(e.target.value);
                   const newMax = (val / 10) ** 2;
                   setYAxisMax(Math.round(newMax * 10) / 10);
-                  setIsAutoY(false);
+                  setYAxisMode('custom');
                 }}
-                className={`w-24 md:w-32 accent-pink-500 ${isAutoY ? 'opacity-50' : 'opacity-100'}`}
+                className={`w-24 md:w-32 accent-pink-500 ${yAxisMode === 'custom' ? 'opacity-100' : 'opacity-50'}`}
               />
               <span className="text-[11px] font-mono w-20 text-right text-slate-600 dark:text-slate-300 tabular-nums">
-                {isAutoY ? t('autoY') : `${yAxisMax} ng/mL`}
+                {yAxisMode === 'custom' ? `${yAxisMax} ng/mL` : `${calculatedYMax.toFixed?.(1) ?? calculatedYMax} ng/mL`}
               </span>
             </div>
 
@@ -1341,6 +1375,13 @@ const App = () => {
               setChartPopover({ open: true, x, y, minute, editingEventId: nearbyEvent?.id ?? null });
             }}
           >
+            {/* Phase 5-J-1: peak-exceeds indicator. Visible only when the data peak is
+                clipped by Therapeutic / Custom modes — Full always shows the peak. */}
+            {yAxisInfo.dataPeak > calculatedYMax && yAxisInfo.dataPeak > 0 && (
+              <div className="absolute top-2 left-16 z-10 text-[10px] font-mono bg-amber-50 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 rounded px-1.5 py-0.5 pointer-events-none shadow-sm">
+                {t('peakExceedsRange', { value: yAxisInfo.dataPeak.toFixed(1), unit: 'ng/mL', time: yAxisInfo.peakTime })}
+              </div>
+            )}
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
