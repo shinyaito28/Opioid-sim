@@ -23,6 +23,7 @@ import {
   convertFromStandardUnit,
 } from './lib/drugs';
 import { simulateConcentration, processEvents } from './lib/simulation';
+import { computeBurdenAUC } from './lib/burden';
 import { useDarkMode } from './hooks/useDarkMode';
 
 
@@ -279,6 +280,10 @@ const App = () => {
   // tick labels and the tooltip header subtract this. 0 = sim-start origin (default).
   // Mutually exclusive with isClockMode (clock-mode owns absolute time semantics).
   const [timeZeroMinute, setTimeZeroMinute] = useState(0);
+  // Phase 5-J-3: burden-curve visibility (right-axis instantaneous risk indicator)
+  // and burden-info expander (definition explainer). Curve defaults visible.
+  const [showBurdenCurve, setShowBurdenCurve] = useState(true);
+  const [showBurdenInfo, setShowBurdenInfo] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
@@ -411,6 +416,25 @@ const App = () => {
     }
     return result;
   }, [simByDrug, activeDrugs, simDuration]);
+
+  // Phase 5-J-3: cumulative AUC-based burden, drug-summed across active opioids.
+  // Complements burdenSeries (instantaneous risk) — see src/lib/burden.js for the
+  // exact integral definitions.
+  const burdenAUC = useMemo(() => {
+    let total = 0;
+    let therapeutic = 0;
+    let supra = 0;
+    for (const d of activeOpioids) {
+      const sim = simByDrug.get(d);
+      if (!sim?.length) continue;
+      const range = THERAPEUTIC_RANGES[d];
+      const auc = computeBurdenAUC(sim, range);
+      total += auc.total;
+      therapeutic += auc.therapeutic;
+      supra += auc.supra;
+    }
+    return { total, therapeutic, supra };
+  }, [simByDrug, activeOpioids]);
 
   const activeParams = useMemo(() => getModelRequirements(drug, model), [drug, model]);
 
@@ -1624,8 +1648,10 @@ const App = () => {
                   ];
                 })}
 
-                {/* COMBINED OPIOID BURDEN — Σ Ce/RespC50 across active drugs; threshold 1.0 */}
-                {activeDrugs.size > 0 && (
+                {/* COMBINED OPIOID BURDEN — Σ Ce/RespC50 across active drugs; threshold 1.0
+                    Phase 5-J-3: this is the **instantaneous** risk index, distinct from the
+                    AUC summary panel below the chart. User-toggleable via showBurdenCurve. */}
+                {activeDrugs.size > 0 && showBurdenCurve && (
                   <>
                     <ReferenceLine
                       yAxisId="burden"
@@ -1909,6 +1935,58 @@ const App = () => {
                   : summaryMetrics.drugUnit}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Phase 5-J-3: Opioid Burden (cumulative AUC) summary panel.
+            Distinct from the right-axis instantaneous risk curve — see lib/burden.js. */}
+        {activeOpioids.length > 0 && (
+          <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg p-3 shadow-sm">
+            <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                {t('opioidBurden')}
+                <button
+                  type="button"
+                  onClick={() => setShowBurdenInfo((v) => !v)}
+                  className="text-slate-400 dark:text-slate-500 hover:text-blue-600 p-0.5 rounded"
+                  title={t('opioidBurden')}
+                  aria-expanded={showBurdenInfo}
+                >
+                  <Info className="w-3 h-3" />
+                </button>
+              </h3>
+              <label className="text-[10px] flex items-center gap-1 cursor-pointer text-slate-600 dark:text-slate-300 select-none">
+                <input
+                  type="checkbox"
+                  checked={showBurdenCurve}
+                  onChange={(e) => setShowBurdenCurve(e.target.checked)}
+                  className="accent-blue-600 w-3 h-3"
+                />
+                {t('burdenCurveToggle')}
+              </label>
+            </div>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div>
+                <div className="text-[9px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wide">{t('burdenTotal')}</div>
+                <div className="text-base font-mono font-bold text-slate-700 dark:text-slate-200 leading-tight">{burdenAUC.total.toFixed(0)}</div>
+                <div className="text-[9px] text-slate-400 dark:text-slate-500">ng/mL·min</div>
+              </div>
+              <div>
+                <div className="text-[9px] uppercase font-bold text-emerald-600 dark:text-emerald-400 tracking-wide">{t('burdenTherapeutic')}</div>
+                <div className="text-base font-mono font-bold text-emerald-700 dark:text-emerald-300 leading-tight">{burdenAUC.therapeutic.toFixed(0)}</div>
+                <div className="text-[9px] text-slate-400 dark:text-slate-500">ng/mL·min</div>
+              </div>
+              <div>
+                <div className="text-[9px] uppercase font-bold text-red-600 dark:text-red-400 tracking-wide">{t('burdenSupra')}</div>
+                <div className="text-base font-mono font-bold text-red-700 dark:text-red-300 leading-tight">{burdenAUC.supra.toFixed(0)}</div>
+                <div className="text-[9px] text-slate-400 dark:text-slate-500">ng/mL·min</div>
+              </div>
+            </div>
+            {showBurdenInfo && (
+              <div className="mt-2 text-[10px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-2 leading-relaxed">
+                {t('burdenTooltip')}
+              </div>
+            )}
           </div>
         )}
 
