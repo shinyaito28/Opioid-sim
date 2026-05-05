@@ -140,6 +140,8 @@ export default function SedationChart({
   // Phase 5-H-4: drag-to-reschedule. Receives (eventId, newTime) and updates the parent's
   // events array. Drag is enabled only when this prop is supplied.
   onEventTimeChange,
+  // Phase 5-H-7: drag end-marker (◀) horizontally to change infusion duration.
+  onEventDurationChange,
 }) {
   const { t } = useTranslation();
   const range = THERAPEUTIC_RANGES[drug] || {};
@@ -179,6 +181,7 @@ export default function SedationChart({
     const xRatio = (xPx - PLOT_LEFT) / (rectWidth - PLOT_LEFT - PLOT_RIGHT_OFFSET);
     return Math.max(0, Math.min(simDuration, Math.round(xRatio * simDuration)));
   };
+  const durationDragEnabled = typeof onEventDurationChange === 'function';
   const onChartPointerDown = (e) => {
     if (!dragEnabled) return;
     const rect = chartAreaRef.current?.getBoundingClientRect();
@@ -186,6 +189,29 @@ export default function SedationChart({
     const x = e.clientX - rect.left;
     const minute = pxToMinuteSed(x, rect.width);
     if (minute === null) return;
+    // Phase 5-H-7: end-marker priority for duration drag. Wider tolerance (±2 min)
+    // so the thin ◀ is grabbable even on touch.
+    if (durationDragEnabled) {
+      const endHit = events.find((ev) => {
+        if (ev.type !== 'infusion' || ev.isInfinite) return false;
+        const endTime = ev.time + ev.duration;
+        return Math.abs(endTime - minute) <= 2;
+      });
+      if (endHit) {
+        dragStateRef.current = {
+          eventId: endHit.id,
+          pointerId: e.pointerId,
+          startX: x,
+          startMinute: minute,
+          originalTime: endHit.time,
+          originalDuration: endHit.duration,
+          mode: 'duration',
+          didDrag: false,
+        };
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+        return;
+      }
+    }
     const nearby = events.find((ev) => {
       if (ev.type === 'bolus') return Math.abs(ev.time - minute) <= 1;
       if (ev.type === 'infusion') {
@@ -201,6 +227,8 @@ export default function SedationChart({
       startX: x,
       startMinute: minute,
       originalTime: nearby.time,
+      originalDuration: nearby.duration,
+      mode: 'time',
       didDrag: false,
     };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
@@ -217,8 +245,14 @@ export default function SedationChart({
     }
     const currentMinute = pxToMinuteSed(x, rect.width);
     if (currentMinute === null) return;
-    const newTime = Math.max(0, Math.min(simDuration, ds.originalTime + (currentMinute - ds.startMinute)));
-    onEventTimeChange(ds.eventId, newTime);
+    const delta = currentMinute - ds.startMinute;
+    if (ds.mode === 'duration') {
+      const newDuration = Math.max(1, ds.originalDuration + delta);
+      onEventDurationChange(ds.eventId, newDuration);
+    } else {
+      const newTime = Math.max(0, Math.min(simDuration, ds.originalTime + delta));
+      onEventTimeChange(ds.eventId, newTime);
+    }
   };
   const onChartPointerUp = (e) => {
     const ds = dragStateRef.current;
@@ -230,7 +264,13 @@ export default function SedationChart({
   const onChartPointerCancel = (e) => {
     const ds = dragStateRef.current;
     if (!ds || ds.pointerId !== e.pointerId) return;
-    if (ds.didDrag && dragEnabled) onEventTimeChange(ds.eventId, ds.originalTime);
+    if (ds.didDrag) {
+      if (ds.mode === 'duration' && durationDragEnabled) {
+        onEventDurationChange(ds.eventId, ds.originalDuration);
+      } else if (dragEnabled) {
+        onEventTimeChange(ds.eventId, ds.originalTime);
+      }
+    }
     dragStateRef.current = null;
   };
 

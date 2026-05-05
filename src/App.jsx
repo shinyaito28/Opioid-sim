@@ -762,6 +762,19 @@ const App = () => {
     });
   };
 
+  // Phase 5-H-7: hit-test for the infusion **end** marker (◀) only — drives the
+  // duration-drag mode. ±2 min tolerance (slightly wider than the start ±1) so the
+  // narrow end-marker is easier to grab; isInfinite events never have an end marker
+  // so they're excluded.
+  const findInfusionEndNearMinute = (eventList, minute, drugFilter) => {
+    return eventList.find((ev) => {
+      if (drugFilter && (ev.drug || drug) !== drugFilter) return false;
+      if (ev.type !== 'infusion' || ev.isInfinite) return false;
+      const endTime = ev.time + ev.duration;
+      return Math.abs(endTime - minute) <= 2;
+    });
+  };
+
   // Phase 5-H-3 (B): event update / delete — driven by ChartEventPopover when in edit mode.
   // Update keeps the original id so list ordering and saved-trace identity remain stable.
   // The popover passes raw user-entered values; this handler does the same standard-unit
@@ -799,6 +812,15 @@ const App = () => {
     ));
   };
 
+  // Phase 5-H-7: duration-only event update used by drag-on-end-marker. Same shape
+  // as handleEventTimeChange but writes the duration field. Minimum 1 min so the
+  // event doesn't collapse to a zero-length artifact.
+  const handleEventDurationChange = (eventId, newDuration) => {
+    setEvents((prev) => prev.map((ev) =>
+      ev.id === eventId ? { ...ev, duration: Math.max(1, newDuration) } : ev
+    ));
+  };
+
   // Phase 5-H-4: drag-to-reschedule on the main chart.
   // Pointer Events unify mouse + touch. The chart wrapper claims pointer capture on
   // pointerdown so subsequent moves/up are guaranteed to land here even if the
@@ -820,6 +842,24 @@ const App = () => {
     const x = e.clientX - rect.left;
     const minute = pxToMinuteMain(x, rect.width);
     if (minute === null) return;
+    // Phase 5-H-7: end-marker takes priority. Wider tolerance (±2) so the thin ◀
+    // is grabbable; if the user is in the middle of a long infusion they fall
+    // through to whole-event drag below.
+    const endHit = findInfusionEndNearMinute(events, minute);
+    if (endHit) {
+      dragStateRef.current = {
+        eventId: endHit.id,
+        pointerId: e.pointerId,
+        startX: x,
+        startMinute: minute,
+        originalTime: endHit.time,
+        originalDuration: endHit.duration,
+        mode: 'duration',
+        didDrag: false,
+      };
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+      return;
+    }
     const nearby = findEventNearMinute(events, minute);
     if (!nearby) return;
     dragStateRef.current = {
@@ -828,6 +868,8 @@ const App = () => {
       startX: x,
       startMinute: minute,
       originalTime: nearby.time,
+      originalDuration: nearby.duration,
+      mode: 'time',
       didDrag: false,
     };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
@@ -844,10 +886,18 @@ const App = () => {
     }
     const currentMinute = pxToMinuteMain(x, rect.width);
     if (currentMinute === null) return;
-    const newTime = Math.max(0, Math.min(simDuration, ds.originalTime + (currentMinute - ds.startMinute)));
-    setEvents((prev) => prev.map((ev) =>
-      ev.id === ds.eventId ? { ...ev, time: newTime } : ev
-    ));
+    const delta = currentMinute - ds.startMinute;
+    if (ds.mode === 'duration') {
+      const newDuration = Math.max(1, ds.originalDuration + delta);
+      setEvents((prev) => prev.map((ev) =>
+        ev.id === ds.eventId ? { ...ev, duration: newDuration } : ev
+      ));
+    } else {
+      const newTime = Math.max(0, Math.min(simDuration, ds.originalTime + delta));
+      setEvents((prev) => prev.map((ev) =>
+        ev.id === ds.eventId ? { ...ev, time: newTime } : ev
+      ));
+    }
   };
   const onChartPointerUp = (e) => {
     const ds = dragStateRef.current;
@@ -860,8 +910,10 @@ const App = () => {
     const ds = dragStateRef.current;
     if (!ds || ds.pointerId !== e.pointerId) return;
     if (ds.didDrag) {
+      const revertField = ds.mode === 'duration' ? 'duration' : 'time';
+      const revertValue = ds.mode === 'duration' ? ds.originalDuration : ds.originalTime;
       setEvents((prev) => prev.map((ev) =>
-        ev.id === ds.eventId ? { ...ev, time: ds.originalTime } : ev
+        ev.id === ds.eventId ? { ...ev, [revertField]: revertValue } : ev
       ));
     }
     dragStateRef.current = null;
@@ -1610,6 +1662,7 @@ const App = () => {
                   onUpdate={handleEventUpdate}
                   onDelete={handleEventDelete}
                   onEventTimeChange={handleEventTimeChange}
+                  onEventDurationChange={handleEventDurationChange}
                 />
               ))}
             </div>
