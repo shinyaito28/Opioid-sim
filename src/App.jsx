@@ -1776,7 +1776,7 @@ const App = () => {
                 <div>
                   <label className="text-slate-500 text-xs block mb-1">{t('drug')}</label>
                   <select value={drug} onChange={handleDrugChange} className="w-full border rounded p-2 font-medium bg-emerald-50 text-emerald-900 border-emerald-200">
-                    <optgroup label="Opioids">
+                    <optgroup label={t('optgroupOpioids')}>
                       <option value="Fentanyl">Fentanyl (mcg)</option>
                       <option value="Remifentanil">Remifentanil (mcg)</option>
                       <option value="Morphine">Morphine (mg)</option>
@@ -1784,7 +1784,7 @@ const App = () => {
                       <option value="Methadone">Methadone (mg)</option>
                       <option value="Sufentanil">Sufentanil (mcg)</option>
                     </optgroup>
-                    <optgroup label="Sedatives">
+                    <optgroup label={t('optgroupSedatives')}>
                       <option value="Propofol">Propofol (mg)</option>
                       <option value="Remimazolam">Remimazolam (mg)</option>
                       <option value="Ketamine">Ketamine (mg, S-form)</option>
@@ -1795,45 +1795,49 @@ const App = () => {
                 <div>
                   <label className="text-slate-500 text-xs block mb-1">{t('pkModel')}</label>
                   <select value={model} onChange={e => setModel(e.target.value)} className="w-full border rounded p-2">
+                    {/* Phase 5-H-5: explicit value attrs keep state-matching stable across languages.
+                        Only the localisable Adult/Pediatric descriptors are translated; author
+                        names, years, and population qualifiers (Peds/Adult, PICU, Neonate, S-form)
+                        stay as international identifiers per user direction (minimal i18n scope). */}
                     {drug === 'Fentanyl' && <>
-                      <option>Bae (2020) Adult</option>
-                      <option>Shafer (Adult)</option>
-                      <option>Ginsberg (Pediatric)</option>
-                      <option>Scott (Peds/Adult)</option>
+                      <option value="Bae (2020) Adult">Bae (2020) {t('modelDescAdult')}</option>
+                      <option value="Shafer (Adult)">Shafer ({t('modelDescAdult')})</option>
+                      <option value="Ginsberg (Pediatric)">Ginsberg ({t('modelDescPediatric')})</option>
+                      <option value="Scott (Peds/Adult)">Scott (Peds/Adult)</option>
                     </>}
                     {drug === 'Remifentanil' && <>
-                      <option>Minto (Adult)</option>
-                      <option>Rigby-Jones (Pediatric)</option>
+                      <option value="Minto (Adult)">Minto ({t('modelDescAdult')})</option>
+                      <option value="Rigby-Jones (Pediatric)">Rigby-Jones ({t('modelDescPediatric')})</option>
                     </>}
                     {drug === 'Morphine' && <>
-                      <option>Mazoit (2007) Adult</option>
-                      <option>Bouwmeester (2004) Pediatric</option>
-                      <option>Anand (2008) Neonate</option>
+                      <option value="Mazoit (2007) Adult">Mazoit (2007) {t('modelDescAdult')}</option>
+                      <option value="Bouwmeester (2004) Pediatric">Bouwmeester (2004) {t('modelDescPediatric')}</option>
+                      <option value="Anand (2008) Neonate">Anand (2008) Neonate</option>
                     </>}
                     {drug === 'Hydromorphone' && <>
-                      <option>Jeleazcov (2014) Adult</option>
-                      <option>Balyan (2020) Pediatric</option>
-                      <option>Standard (Adult)</option>
-                      <option>Pediatric (Scaled)</option>
+                      <option value="Jeleazcov (2014) Adult">Jeleazcov (2014) {t('modelDescAdult')}</option>
+                      <option value="Balyan (2020) Pediatric">Balyan (2020) {t('modelDescPediatric')}</option>
+                      <option value="Standard (Adult)">Standard ({t('modelDescAdult')})</option>
+                      <option value="Pediatric (Scaled)">{t('modelDescPediatric')} (Scaled)</option>
                     </>}
                     {drug === 'Methadone' && <>
-                      <option>Standard (Adult)</option>
+                      <option value="Standard (Adult)">Standard ({t('modelDescAdult')})</option>
                     </>}
                     {drug === 'Sufentanil' && <>
-                      <option>Gepts (1995) Adult</option>
-                      <option>Bartkowska-Sniatkowska (2016) PICU</option>
+                      <option value="Gepts (1995) Adult">Gepts (1995) {t('modelDescAdult')}</option>
+                      <option value="Bartkowska-Sniatkowska (2016) PICU">Bartkowska-Sniatkowska (2016) PICU</option>
                     </>}
                     {drug === 'Propofol' && <>
-                      <option>Eleveld (2018) General-purpose</option>
+                      <option value="Eleveld (2018) General-purpose">Eleveld (2018) General-purpose</option>
                     </>}
                     {drug === 'Remimazolam' && <>
-                      <option>Eleveld (2025) Adult</option>
+                      <option value="Eleveld (2025) Adult">Eleveld (2025) {t('modelDescAdult')}</option>
                     </>}
                     {drug === 'Ketamine' && <>
-                      <option>Noppers (2011) S-ketamine</option>
+                      <option value="Noppers (2011) S-ketamine">Noppers (2011) S-ketamine</option>
                     </>}
                     {drug === 'Dexmedetomidine' && <>
-                      <option>Hannivoort (2015) Adult</option>
+                      <option value="Hannivoort (2015) Adult">Hannivoort (2015) {t('modelDescAdult')}</option>
                     </>}
                   </select>
                 </div>

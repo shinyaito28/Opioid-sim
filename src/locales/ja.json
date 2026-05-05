@@ -84,5 +84,9 @@
     "ketamineHeatPainRef": "熱痛 C50 ~375 ng/mL (Sigtermans/Noppers 実験的 — 鎮静/麻酔閾値ではない)",
     "editingEventLabel": "編集中",
     "update": "更新",
-    "delete": "削除"
+    "delete": "削除",
+    "optgroupOpioids": "オピオイド",
+    "optgroupSedatives": "鎮静薬",
+    "modelDescAdult": "成人",
+    "modelDescPediatric": "小児"
 }

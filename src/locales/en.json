@@ -84,5 +84,9 @@
     "ketamineHeatPainRef": "Heat-pain C50 ~375 ng/mL (Sigtermans/Noppers, experimental — not a sedation/anesthesia threshold)",
     "editingEventLabel": "Editing",
     "update": "Update",
-    "delete": "Delete"
+    "delete": "Delete",
+    "optgroupOpioids": "Opioids",
+    "optgroupSedatives": "Sedatives",
+    "modelDescAdult": "Adult",
+    "modelDescPediatric": "Pediatric"
 }
