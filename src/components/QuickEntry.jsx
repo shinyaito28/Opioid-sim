@@ -145,7 +145,7 @@ export default function QuickEntry({
     : null;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-2 sm:p-3 space-y-2">
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-2 sm:p-3 space-y-2">
       {!valid && (
         <div className="px-3 py-1.5 bg-red-100 border border-red-300 text-red-800 text-xs rounded flex items-center gap-1.5">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
@@ -164,7 +164,7 @@ export default function QuickEntry({
               className={`px-2.5 py-1 text-xs font-bold rounded transition-colors whitespace-nowrap ${
                 isActive
                   ? 'bg-emerald-600 text-white shadow'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
               }`}
             >
               {drugShortNames[d] || d}
@@ -176,11 +176,11 @@ export default function QuickEntry({
       {/* Main row: type + dose + time + Add */}
       <div className="flex flex-wrap items-center gap-1.5">
         {/* Type toggle */}
-        <div className="flex bg-slate-100 rounded p-0.5">
+        <div className="flex bg-slate-100 dark:bg-slate-700 rounded p-0.5">
           <button
             onClick={() => setType(TYPE_BOLUS)}
             className={`px-2.5 py-1 text-xs font-bold rounded flex items-center gap-1 ${
-              type === TYPE_BOLUS ? 'bg-purple-600 text-white shadow' : 'text-slate-600 hover:bg-slate-200'
+              type === TYPE_BOLUS ? 'bg-purple-600 text-white shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200'
             }`}
           >
             <Syringe className="w-3 h-3" />
@@ -189,7 +189,7 @@ export default function QuickEntry({
           <button
             onClick={() => setType(TYPE_INFUSION)}
             className={`px-2.5 py-1 text-xs font-bold rounded flex items-center gap-1 ${
-              type === TYPE_INFUSION ? 'bg-orange-600 text-white shadow' : 'text-slate-600 hover:bg-slate-200'
+              type === TYPE_INFUSION ? 'bg-orange-600 text-white shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200'
             }`}
           >
             <Clock className="w-3 h-3" />
@@ -203,7 +203,7 @@ export default function QuickEntry({
             <button
               onClick={() => stepAmount(-step)}
               disabled={!valid || (parseFloat(amount) || 0) <= 0}
-              className="w-7 h-8 flex items-center justify-center bg-purple-100 hover:bg-purple-200 text-purple-700 rounded disabled:bg-slate-100 disabled:text-slate-400"
+              className="w-7 h-8 flex items-center justify-center bg-purple-100 hover:bg-purple-200 text-purple-700 rounded disabled:bg-slate-100 dark:bg-slate-700 disabled:text-slate-400 dark:text-slate-500"
               title={`−${step}${doseUnit}`}
             >
               <Minus className="w-3 h-3" />
@@ -217,18 +217,18 @@ export default function QuickEntry({
               onChange={(e) => setAmount(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && canAdd) submit(); }}
               placeholder={t('dose')}
-              className="w-20 border border-slate-300 rounded px-2 py-1.5 text-sm font-bold text-center bg-purple-50 text-purple-900 focus:ring-2 focus:ring-purple-300 focus:outline-none"
+              className="w-20 border border-slate-300 dark:border-slate-600 rounded px-2 py-1.5 text-sm font-bold text-center bg-purple-50 text-purple-900 focus:ring-2 focus:ring-purple-300 focus:outline-none"
               disabled={!valid}
             />
             <button
               onClick={() => stepAmount(step)}
               disabled={!valid}
-              className="w-7 h-8 flex items-center justify-center bg-purple-100 hover:bg-purple-200 text-purple-700 rounded disabled:bg-slate-100 disabled:text-slate-400"
+              className="w-7 h-8 flex items-center justify-center bg-purple-100 hover:bg-purple-200 text-purple-700 rounded disabled:bg-slate-100 dark:bg-slate-700 disabled:text-slate-400 dark:text-slate-500"
               title={`+${step}${doseUnit}`}
             >
               <Plus className="w-3 h-3" />
             </button>
-            <span className="text-xs text-slate-500 font-mono ml-0.5">{doseUnit}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 font-mono ml-0.5">{doseUnit}</span>
           </div>
         ) : (
           <div className="flex items-center gap-1 flex-wrap">
@@ -241,17 +241,17 @@ export default function QuickEntry({
               onChange={(e) => setRate(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && canAdd) submit(); }}
               placeholder={t('rate')}
-              className="w-20 border border-slate-300 rounded px-2 py-1.5 text-sm font-bold text-center bg-orange-50 text-orange-900 focus:ring-2 focus:ring-orange-300 focus:outline-none"
+              className="w-20 border border-slate-300 dark:border-slate-600 rounded px-2 py-1.5 text-sm font-bold text-center bg-orange-50 text-orange-900 focus:ring-2 focus:ring-orange-300 focus:outline-none"
               disabled={!valid}
             />
             <select
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
-              className="border border-slate-300 rounded px-1 py-1.5 text-xs"
+              className="border border-slate-300 dark:border-slate-600 rounded px-1 py-1.5 text-xs"
             >
               {drugUnits[drug]?.map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
-            <label className="flex items-center gap-1 text-xs text-slate-700">
+            <label className="flex items-center gap-1 text-xs text-slate-700 dark:text-slate-200">
               <input
                 type="checkbox"
                 checked={isInfinite}
@@ -268,7 +268,7 @@ export default function QuickEntry({
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
                 placeholder={t('summaryMin')}
-                className="w-16 border border-slate-300 rounded px-1 py-1.5 text-sm text-center"
+                className="w-16 border border-slate-300 dark:border-slate-600 rounded px-1 py-1.5 text-sm text-center"
               />
             )}
           </div>
@@ -278,7 +278,7 @@ export default function QuickEntry({
         <div className="flex items-center gap-1 ml-auto flex-wrap">
           <button
             onClick={() => shiftTime(-1)}
-            className="px-2 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded"
+            className="px-2 py-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded"
             title="時刻を1分前にシフト"
           >
             −1m
@@ -288,7 +288,7 @@ export default function QuickEntry({
               type="time"
               value={timeDisplay}
               onChange={(e) => onTimeInputChange(e.target.value)}
-              className="border border-slate-300 rounded px-1 py-1 text-xs font-mono"
+              className="border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs font-mono"
             />
           ) : (
             <input
@@ -296,17 +296,17 @@ export default function QuickEntry({
               inputMode="decimal"
               value={timeDisplay}
               onChange={(e) => onTimeInputChange(e.target.value)}
-              className="w-16 border border-slate-300 rounded px-1 py-1.5 text-xs text-center font-mono"
+              className="w-16 border border-slate-300 dark:border-slate-600 rounded px-1 py-1.5 text-xs text-center font-mono"
               title="t (min)"
             />
           )}
-          {!isClockMode && <span className="text-[10px] text-slate-500">min</span>}
+          {!isClockMode && <span className="text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500">min</span>}
           {timeOffsetLabel && timeOffsetLabel !== t('now') && (
-            <span className="text-[10px] text-slate-500 font-mono">({timeOffsetLabel})</span>
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500 font-mono">({timeOffsetLabel})</span>
           )}
           <button
             onClick={() => shiftTime(1)}
-            className="px-2 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded"
+            className="px-2 py-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded"
             title="時刻を1分後にシフト"
           >
             +1m
@@ -314,7 +314,7 @@ export default function QuickEntry({
           {isClockMode && (
             <button
               onClick={resetToNow}
-              className="px-2 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded flex items-center gap-1"
+              className="px-2 py-1.5 text-xs bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded flex items-center gap-1"
               title="現在時刻にリセット"
             >
               <RotateCcw className="w-3 h-3" />

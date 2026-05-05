@@ -219,14 +219,14 @@ export default function ChartEventPopover({
   return (
     <div
       ref={ref}
-      className="absolute z-50 glass shadow-xl border border-slate-300 rounded-lg p-3 w-72 select-none"
+      className="absolute z-50 glass shadow-xl border border-slate-300 dark:border-slate-600 rounded-lg p-3 w-72 select-none"
       style={{ left: clampedX, top: clampedY, transform: yTransform }}
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5">
           {isEdit && <Edit2 className="w-3 h-3 text-amber-600" />}
-          <span className="text-xs font-semibold text-slate-700">
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
             {isClockMode
               ? `${minutesToTime(time, startTime)} (${time} min)`
               : `${time} min`}
@@ -239,7 +239,7 @@ export default function ChartEventPopover({
         </div>
         <button
           onClick={onClose}
-          className="text-slate-400 hover:text-slate-700"
+          className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:text-slate-200"
           aria-label="Close"
         >
           <X className="w-4 h-4" />
@@ -257,7 +257,7 @@ export default function ChartEventPopover({
               className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
                 isActive
                   ? 'bg-emerald-600 text-white border-emerald-600'
-                  : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:bg-slate-700'
               }`}
             >
               {drugShortNames[d] || d}
@@ -267,11 +267,11 @@ export default function ChartEventPopover({
       </div>
 
       {/* Type toggle */}
-      <div className="flex bg-slate-100 rounded p-0.5 mb-2 w-fit">
+      <div className="flex bg-slate-100 dark:bg-slate-700 rounded p-0.5 mb-2 w-fit">
         <button
           onClick={() => setType('bolus')}
           className={`px-2.5 py-1 text-xs font-bold rounded flex items-center gap-1 ${
-            type === 'bolus' ? 'bg-purple-600 text-white shadow' : 'text-slate-600 hover:bg-slate-200'
+            type === 'bolus' ? 'bg-purple-600 text-white shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:bg-slate-700'
           }`}
         >
           <Syringe className="w-3 h-3" />
@@ -280,7 +280,7 @@ export default function ChartEventPopover({
         <button
           onClick={() => setType('infusion')}
           className={`px-2.5 py-1 text-xs font-bold rounded flex items-center gap-1 ${
-            type === 'infusion' ? 'bg-orange-600 text-white shadow' : 'text-slate-600 hover:bg-slate-200'
+            type === 'infusion' ? 'bg-orange-600 text-white shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:bg-slate-700'
           }`}
         >
           <Clock className="w-3 h-3" />
@@ -294,7 +294,7 @@ export default function ChartEventPopover({
           <button
             onClick={() => stepAmount(-step)}
             disabled={(parseFloat(amount) || 0) <= 0}
-            className="w-7 h-8 flex items-center justify-center bg-purple-100 hover:bg-purple-200 text-purple-700 rounded disabled:bg-slate-100 disabled:text-slate-400"
+            className="w-7 h-8 flex items-center justify-center bg-purple-100 hover:bg-purple-200 text-purple-700 rounded disabled:bg-slate-100 dark:bg-slate-700 disabled:text-slate-400 dark:text-slate-500"
           >
             <Minus className="w-3 h-3" />
           </button>
@@ -307,7 +307,7 @@ export default function ChartEventPopover({
             onChange={(e) => setAmount(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && valEntered) handleAdd(); }}
             placeholder={t('dose')}
-            className="w-20 border border-slate-300 rounded px-2 py-1.5 text-sm font-bold text-center bg-purple-50 text-purple-900 focus:ring-2 focus:ring-purple-300 focus:outline-none"
+            className="w-20 border border-slate-300 dark:border-slate-600 rounded px-2 py-1.5 text-sm font-bold text-center bg-purple-50 text-purple-900 focus:ring-2 focus:ring-purple-300 focus:outline-none"
           />
           <button
             onClick={() => stepAmount(step)}
@@ -315,7 +315,7 @@ export default function ChartEventPopover({
           >
             <Plus className="w-3 h-3" />
           </button>
-          <span className="text-xs text-slate-500 font-mono ml-0.5">{doseUnit}</span>
+          <span className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 font-mono ml-0.5">{doseUnit}</span>
         </div>
       ) : (
         <div className="flex items-center gap-1 flex-wrap mb-2">
@@ -328,16 +328,16 @@ export default function ChartEventPopover({
             onChange={(e) => setRate(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && valEntered) handleAdd(); }}
             placeholder={t('rate')}
-            className="w-20 border border-slate-300 rounded px-2 py-1.5 text-sm font-bold text-center bg-orange-50 text-orange-900 focus:ring-2 focus:ring-orange-300 focus:outline-none"
+            className="w-20 border border-slate-300 dark:border-slate-600 rounded px-2 py-1.5 text-sm font-bold text-center bg-orange-50 text-orange-900 focus:ring-2 focus:ring-orange-300 focus:outline-none"
           />
           <select
             value={unit}
             onChange={(e) => setUnit(e.target.value)}
-            className="border border-slate-300 rounded px-1 py-1.5 text-xs"
+            className="border border-slate-300 dark:border-slate-600 rounded px-1 py-1.5 text-xs"
           >
             {drugUnits[drug]?.map((u) => <option key={u} value={u}>{u}</option>)}
           </select>
-          <label className="flex items-center gap-1 text-xs text-slate-700">
+          <label className="flex items-center gap-1 text-xs text-slate-700 dark:text-slate-200">
             <input
               type="checkbox"
               checked={isInfinite}
@@ -354,7 +354,7 @@ export default function ChartEventPopover({
               value={duration}
               onChange={(e) => setDuration(e.target.value)}
               placeholder={t('summaryMin')}
-              className="w-16 border border-slate-300 rounded px-1 py-1.5 text-xs text-center"
+              className="w-16 border border-slate-300 dark:border-slate-600 rounded px-1 py-1.5 text-xs text-center"
             />
           )}
         </div>
@@ -364,13 +364,13 @@ export default function ChartEventPopover({
       <div className="flex items-center gap-1 mb-2 text-xs">
         <button
           onClick={() => setTime(time - 5)}
-          className="px-1.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-bold"
+          className="px-1.5 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded font-bold"
         >
           −5m
         </button>
         <button
           onClick={() => setTime(time - 1)}
-          className="px-1.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-bold"
+          className="px-1.5 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded font-bold"
         >
           −1m
         </button>
@@ -378,18 +378,18 @@ export default function ChartEventPopover({
           type="number"
           value={time}
           onChange={(e) => setTime(parseFloat(e.target.value) || 0)}
-          className="w-16 border border-slate-300 rounded px-1 py-1 text-center font-mono"
+          className="w-16 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-center font-mono"
         />
-        <span className="text-[10px] text-slate-500">min</span>
+        <span className="text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500">min</span>
         <button
           onClick={() => setTime(time + 1)}
-          className="px-1.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-bold"
+          className="px-1.5 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded font-bold"
         >
           +1m
         </button>
         <button
           onClick={() => setTime(time + 5)}
-          className="px-1.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-bold"
+          className="px-1.5 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded font-bold"
         >
           +5m
         </button>

@@ -42,15 +42,15 @@ export default function PatientChip({ patient, setPatient, autoFillStats, setAut
 
       {mode === 'expanded' && (
         <div
-          className="absolute top-full mt-1 right-0 sm:right-auto sm:left-0 glass shadow-xl border border-slate-300 rounded-lg p-3 z-50 w-72 text-slate-800"
+          className="absolute top-full mt-1 right-0 sm:right-auto sm:left-0 glass shadow-xl border border-slate-300 dark:border-slate-600 rounded-lg p-3 z-50 w-72 text-slate-800 dark:text-slate-100"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <div className="flex justify-between items-center mb-2 border-b border-slate-200 pb-2">
-            <div className="flex items-center gap-1.5 text-slate-700">
+          <div className="flex justify-between items-center mb-2 border-b border-slate-200 dark:border-slate-700 pb-2">
+            <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
               <User className="w-4 h-4" />
               <h3 className="font-bold text-sm">{t('patientSettings')}</h3>
             </div>
-            <label className="flex items-center gap-1 text-[10px] text-blue-700 cursor-pointer bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 transition">
+            <label className="flex items-center gap-1 text-[10px] text-blue-700 dark:text-blue-300 cursor-pointer bg-blue-50 dark:bg-blue-900/40 px-2 py-1 rounded hover:bg-blue-100 dark:hover:bg-blue-900/60 transition">
               <Wand2 className="w-3 h-3" />
               <input
                 type="checkbox"
@@ -64,29 +64,29 @@ export default function PatientChip({ patient, setPatient, autoFillStats, setAut
 
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div>
-              <label className="text-[10px] uppercase text-slate-500 font-bold">{t('age')}</label>
+              <label className="text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold">{t('age')}</label>
               <input
                 type="number"
                 inputMode="decimal"
                 min="0"
                 value={patient.age}
                 onChange={(e) => update('age', Math.max(0, Number(e.target.value)))}
-                className="w-full border border-slate-300 rounded p-1.5 bg-white"
+                className="w-full border border-slate-300 dark:border-slate-600 rounded p-1.5 bg-white dark:bg-slate-800"
               />
             </div>
             <div>
-              <label className="text-[10px] uppercase text-slate-500 font-bold">{t('gender')}</label>
+              <label className="text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold">{t('gender')}</label>
               <select
                 value={patient.gender}
                 onChange={(e) => update('gender', e.target.value)}
-                className="w-full border border-slate-300 rounded p-1.5 bg-white"
+                className="w-full border border-slate-300 dark:border-slate-600 rounded p-1.5 bg-white dark:bg-slate-800"
               >
                 <option value="male">{t('male')}</option>
                 <option value="female">{t('female')}</option>
               </select>
             </div>
             <div>
-              <label className="text-[10px] uppercase text-slate-500 font-bold flex justify-between">
+              <label className="text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold flex justify-between">
                 <span>{t('weight')}</span>
                 {autoFillStats && <span className="text-[9px] opacity-60">Auto</span>}
               </label>
@@ -96,11 +96,11 @@ export default function PatientChip({ patient, setPatient, autoFillStats, setAut
                 min="0"
                 value={patient.weight}
                 onChange={(e) => update('weight', Math.max(0, Number(e.target.value)))}
-                className="w-full border border-slate-300 rounded p-1.5 bg-white"
+                className="w-full border border-slate-300 dark:border-slate-600 rounded p-1.5 bg-white dark:bg-slate-800"
               />
             </div>
             <div>
-              <label className="text-[10px] uppercase text-slate-500 font-bold flex justify-between">
+              <label className="text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold flex justify-between">
                 <span>{t('height')}</span>
                 {autoFillStats && <span className="text-[9px] opacity-60">Auto</span>}
               </label>
@@ -110,7 +110,7 @@ export default function PatientChip({ patient, setPatient, autoFillStats, setAut
                 min="0"
                 value={patient.height}
                 onChange={(e) => update('height', Math.max(0, Number(e.target.value)))}
-                className="w-full border border-slate-300 rounded p-1.5 bg-white"
+                className="w-full border border-slate-300 dark:border-slate-600 rounded p-1.5 bg-white dark:bg-slate-800"
               />
             </div>
           </div>

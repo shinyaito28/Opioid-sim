@@ -1,14 +1,17 @@
-import { Activity, Eye, EyeOff } from 'lucide-react';
+import { Activity, Eye, EyeOff, Sun, Moon } from 'lucide-react';
 import PatientChip from './PatientChip';
 import ScenarioMenu from './ScenarioMenu';
 
 // Sticky top bar — replaces the old `<header>` block.
-// Contains brand, patient chip (click to expand), scenarios menu, language toggle, ranges toggle.
+// Contains brand, patient chip (click to expand), scenarios menu, language toggle,
+// dark-mode toggle, ranges toggle. The bar itself stays slate-800 in both themes
+// (always-dark navigation pattern) — only the surfaces below it react to theme.
 export default function TopBar({
   t, i18n,
   showRanges, setShowRanges,
   patient, setPatient, autoFillStats, setAutoFillStats,
   savedScenarios, saveScenario, loadScenario, deleteScenario,
+  isDark, setIsDark,
 }) {
   return (
     <header
@@ -56,6 +59,15 @@ export default function TopBar({
             JP
           </button>
         </div>
+
+        <button
+          onClick={() => setIsDark((v) => !v)}
+          className="text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded flex items-center"
+          title={isDark ? 'Light mode' : 'Dark mode'}
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+        </button>
 
         <button
           onClick={() => setShowRanges(!showRanges)}

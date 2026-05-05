@@ -72,8 +72,8 @@ const SedationTooltip = ({ active, payload, label, events, drug, isClockMode, st
   const evtShort = DRUG_SHORT_NAMES[drug] || drug;
 
   return (
-    <div className="bg-white/95 border border-slate-200 rounded-lg shadow p-2 text-xs min-w-[140px]">
-      <div className="font-semibold text-slate-700 mb-1">{headerLabel}</div>
+    <div className="bg-white/95 dark:bg-slate-800/95 border border-slate-200 dark:border-slate-700 dark:border-slate-600 rounded-lg shadow p-2 text-xs min-w-[140px]">
+      <div className="font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-200 mb-1">{headerLabel}</div>
       {payload.map((entry, idx) => (
         <div key={idx} className="flex justify-between gap-3" style={{ color: entry.color }}>
           <span>{entry.name}</span>
@@ -83,12 +83,12 @@ const SedationTooltip = ({ active, payload, label, events, drug, isClockMode, st
         </div>
       ))}
       {nearbyEvents.length > 0 && (
-        <div className="mt-1.5 pt-1.5 border-t border-slate-200 space-y-0.5">
+        <div className="mt-1.5 pt-1.5 border-t border-slate-200 dark:border-slate-700 dark:border-slate-600 space-y-0.5">
           {nearbyEvents.map((e) => {
             const evtTimeLabel = isClockMode ? minutesToTime(e.time, startTime) : `${e.time}min`;
             if (e.type === 'bolus') {
               return (
-                <div key={e.id} className="text-[10px] text-purple-700">
+                <div key={e.id} className="text-[10px] text-purple-700 dark:text-purple-300">
                   <span className="font-bold">▼</span> {evtShort} {e.amount}{evtUnit} @{evtTimeLabel}
                 </div>
               );
@@ -98,7 +98,7 @@ const SedationTooltip = ({ active, payload, label, events, drug, isClockMode, st
               : `${e.rate}/hr`;
             const durLabel = e.isInfinite ? '∞' : `${e.duration}min`;
             return (
-              <div key={e.id} className="text-[10px] text-orange-700">
+              <div key={e.id} className="text-[10px] text-orange-700 dark:text-orange-300">
                 <span className="font-bold">▶</span> {evtShort} {rateText} ({durLabel})
               </div>
             );
@@ -142,6 +142,9 @@ export default function SedationChart({
   onEventTimeChange,
   // Phase 5-H-7: drag end-marker (◀) horizontally to change infusion duration.
   onEventDurationChange,
+  // Phase 5-I-1: shared theme colours from App.jsx so the Recharts axis / grid /
+  // tooltip border match the active light/dark mode without each chart re-deriving them.
+  chartColors,
 }) {
   const { t } = useTranslation();
   const range = THERAPEUTIC_RANGES[drug] || {};
@@ -314,14 +317,14 @@ export default function SedationChart({
   const showCeLine = !disabledCe && (!cpOnlyDefault || (showAdvancedCe && advancedKe0));
 
   return (
-    <div className="glass rounded-xl p-3 border border-slate-200/60 shadow-sm">
+    <div className="glass rounded-xl p-3 border border-slate-200 dark:border-slate-700/60 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-y-1 gap-x-2 mb-1">
-        <h4 className="text-xs font-semibold text-slate-700">
+        <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-200">
           {shortName} — {t('sedationMonitor')}
         </h4>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1.5">
-            <ZoomIn className="w-3 h-3 text-slate-500" />
+            <ZoomIn className="w-3 h-3 text-slate-500 dark:text-slate-400 dark:text-slate-500" />
             <label className="flex items-center gap-1 text-[10px] cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -345,7 +348,7 @@ export default function SedationChart({
               }}
               className={`w-20 md:w-24 accent-pink-500 ${yAuto ? 'opacity-50' : 'opacity-100'}`}
             />
-            <span className="text-[10px] font-mono w-16 text-right text-slate-600 tabular-nums">
+            <span className="text-[10px] font-mono w-16 text-right text-slate-600 dark:text-slate-300 tabular-nums">
               {yAuto ? t('autoY') : `${yMax} ${displayUnit}`}
             </span>
           </div>
@@ -355,8 +358,8 @@ export default function SedationChart({
               onClick={() => setShowAdvancedCe((v) => !v)}
               className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
                 showAdvancedCe
-                  ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
-                  : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+                  ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-700 hover:bg-amber-200 dark:hover:bg-amber-900/60'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:bg-slate-700'
               }`}
               title={range.advancedKe0Source || ''}
             >
@@ -367,7 +370,7 @@ export default function SedationChart({
             <button
               type="button"
               disabled
-              className="text-[10px] px-2 py-0.5 rounded border bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
+              className="text-[10px] px-2 py-0.5 rounded border bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 cursor-not-allowed"
               title={t(disabledCe.reasonKey)}
             >
               {t('sedationCeUnavailable')}
@@ -377,7 +380,7 @@ export default function SedationChart({
       </div>
 
       {showAdvancedCe && advancedKe0 && (
-        <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-1.5">
+        <div className="text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded px-2 py-1 mb-1.5">
           {t('sedationAdvancedCeNote', { source: range.advancedKe0Source, ke0: advancedKe0 })}
         </div>
       )}
@@ -431,7 +434,7 @@ export default function SedationChart({
               }
             } : undefined}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+            <CartesianGrid strokeDasharray="3 3" stroke={chartColors?.gridStroke || '#f1f5f9'} />
             <XAxis
               dataKey="time"
               type="number"
@@ -440,13 +443,15 @@ export default function SedationChart({
               allowDataOverflow
               tickFormatter={(val) => isClockMode ? minutesToTime(val, startTime) : val}
               fontSize={10}
+              stroke={chartColors?.axisStroke}
             />
             <YAxis
               yAxisId="left"
               domain={[0, yAuto ? 'auto' : yMax]}
               allowDataOverflow={!yAuto}
-              label={{ value: `Conc (${displayUnit})`, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+              label={{ value: `Conc (${displayUnit})`, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: chartColors?.axisStroke } }}
               fontSize={10}
+              stroke={chartColors?.axisStroke}
             />
             <YAxis yAxisId="burden-spacer" orientation="right" width={40} hide />
             <Tooltip
@@ -635,7 +640,7 @@ export default function SedationChart({
       </div>
 
       {range.contextWarningKey && (
-        <p className="text-[10px] text-slate-500 italic mt-1.5 leading-tight">
+        <p className="text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500 italic mt-1.5 leading-tight">
           {t(range.contextWarningKey)}
         </p>
       )}

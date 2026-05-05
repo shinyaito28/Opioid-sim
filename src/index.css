@@ -8,6 +8,16 @@
   backdrop-filter: blur(14px) saturate(150%);
   -webkit-backdrop-filter: blur(14px) saturate(150%);
 }
+/* Phase 5-I-1: dark variant — inverts the glass to a translucent slate-900. */
+.dark .glass {
+  background: rgba(15, 23, 42, 0.82);
+}
+/* Reasonable defaults for dark mode body so areas without explicit dark: vars
+   don't end up bright white. App.jsx still owns the page-level background. */
+.dark body {
+  background: #0f172a;
+  color: #e2e8f0;
+}
 
 /* Touch targets — at least 44px in any clickable region (Apple HIG) */
 .tap-target { min-height: 44px; min-width: 44px; }

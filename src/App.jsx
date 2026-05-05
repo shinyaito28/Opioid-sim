@@ -23,6 +23,7 @@ import {
   convertFromStandardUnit,
 } from './lib/drugs';
 import { simulateConcentration, processEvents } from './lib/simulation';
+import { useDarkMode } from './hooks/useDarkMode';
 
 
 /**
@@ -55,8 +56,8 @@ const ChartTooltip = ({ active, payload, label, events, isClockMode, startTime }
   });
 
   return (
-    <div className="bg-white/95 border border-slate-200 rounded-lg shadow p-2 text-xs min-w-[140px]">
-      <div className="font-semibold text-slate-700 mb-1">{headerLabel}</div>
+    <div className="bg-white/95 dark:bg-slate-800/95 border border-slate-200 dark:border-slate-700 dark:border-slate-600 rounded-lg shadow p-2 text-xs min-w-[140px]">
+      <div className="font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-200 mb-1">{headerLabel}</div>
       {payload.map((entry, idx) => (
         <div key={idx} className="flex justify-between gap-3" style={{ color: entry.color }}>
           <span>{entry.name}</span>
@@ -64,7 +65,7 @@ const ChartTooltip = ({ active, payload, label, events, isClockMode, startTime }
         </div>
       ))}
       {nearbyEvents.length > 0 && (
-        <div className="mt-1.5 pt-1.5 border-t border-slate-200 space-y-0.5">
+        <div className="mt-1.5 pt-1.5 border-t border-slate-200 dark:border-slate-700 dark:border-slate-600 space-y-0.5">
           {nearbyEvents.map((e) => {
             const evtDrug = e.drug || 'Fentanyl';
             const evtShort = DRUG_SHORT_NAMES[evtDrug] || evtDrug;
@@ -248,6 +249,14 @@ const App = () => {
   const dragStateRef = useRef(null);
   const dragEndTimeRef = useRef(0);
 
+  // Phase 5-I-1: theme. Hook owns the html.dark class + localStorage + meta theme-color.
+  // The chart Recharts components are not styled by Tailwind so we derive a small
+  // chartColors object that switches axis / grid / tooltip colours per theme.
+  const [isDark, setIsDark] = useDarkMode();
+  const chartColors = isDark
+    ? { axisStroke: '#94a3b8', gridStroke: '#334155', tooltipBg: '#1e293b', tooltipText: '#f1f5f9', tooltipBorder: '#475569' }
+    : { axisStroke: '#475569', gridStroke: '#f1f5f9', tooltipBg: '#ffffff', tooltipText: '#0f172a', tooltipBorder: '#cbd5e1' };
+
   const [simDuration, setSimDuration] = useState(120);
   const [maxTimeScale, setMaxTimeScale] = useState(720);
 
@@ -397,16 +406,16 @@ const App = () => {
 
   const getFieldStyle = (paramName) => {
     if (activeParams.includes(paramName)) {
-      return "bg-white border-blue-300 ring-1 ring-blue-100 text-slate-800 font-medium";
+      return "bg-white dark:bg-slate-800 border-blue-300 dark:border-blue-700 ring-1 ring-blue-100 dark:ring-blue-900/40 text-slate-800 dark:text-slate-100 font-medium";
     }
-    return "bg-slate-100 border-slate-200 text-slate-400 opacity-80";
+    return "bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 opacity-80";
   };
 
   const getLabelStyle = (paramName) => {
     if (activeParams.includes(paramName)) {
       return "text-blue-600 font-bold";
     }
-    return "text-slate-400";
+    return "text-slate-400 dark:text-slate-500";
   };
 
   // --- REAL-TIME CALCULATION ---
@@ -1187,7 +1196,7 @@ const App = () => {
 
   return (
     <div
-      className="min-h-screen bg-slate-50 text-slate-800 font-sans"
+      className="min-h-screen bg-slate-50 dark:bg-slate-800 text-slate-800 font-sans dark:bg-slate-950 dark:text-slate-100"
       style={{ paddingBottom: 'max(5rem, env(safe-area-inset-bottom))' }}
     >
 
@@ -1204,6 +1213,8 @@ const App = () => {
         saveScenario={saveScenario}
         loadScenario={loadScenario}
         deleteScenario={deleteScenario}
+        isDark={isDark}
+        setIsDark={setIsDark}
       />
 
       <main
@@ -1232,11 +1243,11 @@ const App = () => {
         />
 
         {/* --- MAIN CHART SECTION --- */}
-        <div className="bg-white p-2 md:p-4 rounded-xl shadow border border-slate-200">
+        <div className="bg-white dark:bg-slate-900 p-2 md:p-4 rounded-xl shadow border border-slate-200 dark:border-slate-700">
           <div className="flex flex-wrap justify-between items-center mb-2 gap-x-4 gap-y-2">
             <div>
-              <h2 className="font-bold text-slate-700 text-lg">{t('chartTitle')}</h2>
-              <p className="text-xs text-slate-500">
+              <h2 className="font-bold text-slate-700 dark:text-slate-200 text-lg">{t('chartTitle')}</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
                 {t('chartLegend')}
               </p>
             </div>
@@ -1245,7 +1256,7 @@ const App = () => {
                 consistency. Moved here from the bottom Axis Controls strip so chart-display
                 concerns sit on the chart card and time-scope concerns sit on their own row. */}
             <div className="flex items-center gap-1.5">
-              <ZoomIn className="w-3 h-3 text-slate-500" />
+              <ZoomIn className="w-3 h-3 text-slate-500 dark:text-slate-400 dark:text-slate-500" />
               <label className="flex items-center gap-1 text-[11px] cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -1266,7 +1277,7 @@ const App = () => {
                 }}
                 className={`w-24 md:w-32 accent-pink-500 ${isAutoY ? 'opacity-50' : 'opacity-100'}`}
               />
-              <span className="text-[11px] font-mono w-20 text-right text-slate-600 tabular-nums">
+              <span className="text-[11px] font-mono w-20 text-right text-slate-600 dark:text-slate-300 tabular-nums">
                 {isAutoY ? t('autoY') : `${yAxisMax} ng/mL`}
               </span>
             </div>
@@ -1290,7 +1301,7 @@ const App = () => {
               {savedTraces.length > 0 && (
                 <button
                   onClick={clearTraces}
-                  className="flex items-center gap-1 bg-slate-200 text-slate-600 px-3 py-1.5 rounded hover:bg-slate-300 text-sm transition-colors"
+                  className="flex items-center gap-1 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded hover:bg-slate-300 text-sm transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
                   {t('clear')}
@@ -1349,7 +1360,7 @@ const App = () => {
                   }
                 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartColors.gridStroke} />
                 <XAxis
                   dataKey="time"
                   type="number"
@@ -1357,12 +1368,14 @@ const App = () => {
                   tickCount={10}
                   allowDataOverflow
                   tickFormatter={(val) => isClockMode ? minutesToTime(val, startTime) : val}
+                  stroke={chartColors.axisStroke}
                 />
                 <YAxis
                   yAxisId="left"
-                  label={{ value: t('concLabel'), angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+                  label={{ value: t('concLabel'), angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: chartColors.axisStroke } }}
                   domain={[0, calculatedYMax]}
                   allowDataOverflow={true}
+                  stroke={chartColors.axisStroke}
                 />
                 {/* Right Y-axis dedicated to the Combined Opioid Burden (Σ Ce/RespC50). */}
                 {activeDrugs.size > 0 && (
@@ -1370,8 +1383,8 @@ const App = () => {
                     yAxisId="burden"
                     orientation="right"
                     domain={[0, 2.5]}
-                    stroke="#475569"
-                    label={{ value: 'Burden', angle: 90, position: 'insideRight', style: { textAnchor: 'middle', fill: '#475569' }, fontSize: 11 }}
+                    stroke={chartColors.axisStroke}
+                    label={{ value: 'Burden', angle: 90, position: 'insideRight', style: { textAnchor: 'middle', fill: chartColors.axisStroke }, fontSize: 11 }}
                     width={40}
                   />
                 )}
@@ -1380,6 +1393,7 @@ const App = () => {
                 )}
 
                 <Tooltip
+                  contentStyle={{ background: chartColors.tooltipBg, color: chartColors.tooltipText, border: `1px solid ${chartColors.tooltipBorder}` }}
                   content={
                     <ChartTooltip
                       events={events}
@@ -1591,12 +1605,12 @@ const App = () => {
 
             {
               isClockMode && currentValues && currentSimMinutes >= 0 && currentSimMinutes <= simDuration && (
-                <div className="absolute top-2 right-14 bg-white/90 p-2 rounded shadow border border-red-200 text-xs pointer-events-none">
+                <div className="absolute top-2 right-14 bg-white/90 dark:bg-slate-800/90 p-2 rounded shadow border border-red-200 dark:border-red-900/50 text-xs pointer-events-none">
                   <div className="font-bold text-red-600 flex items-center gap-1">
                     <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
                     {t('now')} ({currentTime.getHours().toString().padStart(2, '0')}:{currentTime.getMinutes().toString().padStart(2, '0')})
                   </div>
-                  <div className="grid grid-cols-2 gap-x-2 mt-1 text-slate-600">
+                  <div className="grid grid-cols-2 gap-x-2 mt-1 text-slate-600 dark:text-slate-300">
                     <span>Cp:</span> <span className="font-mono font-bold">{currentValues.cp}</span>
                     <span>Ce:</span> <span className="font-mono font-bold">{currentValues.ce}</span>
                   </div>
@@ -1663,18 +1677,19 @@ const App = () => {
                   onDelete={handleEventDelete}
                   onEventTimeChange={handleEventTimeChange}
                   onEventDurationChange={handleEventDurationChange}
+                  chartColors={chartColors}
                 />
               ))}
             </div>
           )}
 
           {/* Axis Controls */}
-          <div className="flex flex-col sm:flex-row justify-end mt-2 gap-4 items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
+          <div className="flex flex-col sm:flex-row justify-end mt-2 gap-4 items-center bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
             {/* Time Axis Controls */}
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">{t('timeAxis')}</span>
-              <label className="flex items-center gap-1 text-xs cursor-pointer select-none bg-slate-200 px-2 py-1 rounded hover:bg-slate-300 transition-colors mr-2">
-                <Clock className="w-3 h-3 text-slate-600" />
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500 whitespace-nowrap">{t('timeAxis')}</span>
+              <label className="flex items-center gap-1 text-xs cursor-pointer select-none bg-slate-200 dark:bg-slate-700 px-2 py-1 rounded hover:bg-slate-300 transition-colors mr-2">
+                <Clock className="w-3 h-3 text-slate-600 dark:text-slate-300" />
                 <input
                   type="checkbox"
                   checked={isClockMode}
@@ -1689,7 +1704,7 @@ const App = () => {
                   }}
                   className="accent-blue-600 w-3 h-3"
                 />
-                <span className="font-semibold text-slate-600">{t('clockMode')}</span>
+                <span className="font-semibold text-slate-600 dark:text-slate-300">{t('clockMode')}</span>
               </label>
 
               {
@@ -1698,18 +1713,18 @@ const App = () => {
                     type="time"
                     value={startTime}
                     onChange={(e) => handleStartTimeChange(e.target.value)}
-                    className="text-xs border border-slate-300 rounded p-1 mr-2"
+                    className="text-xs border border-slate-300 dark:border-slate-600 rounded p-1 mr-2"
                   />
                 )
               }
 
 
-              <div className="flex bg-slate-200 rounded-lg p-0.5 gap-0.5">
+              <div className="flex bg-slate-200 dark:bg-slate-700 rounded-lg p-0.5 gap-0.5">
                 {[360, 720, 1440].map((scale) => (
                   <button
                     key={scale}
                     onClick={() => handleScaleChange(scale)}
-                    className={`text-[10px] px-2 py-1 rounded ${maxTimeScale === scale ? 'bg-white shadow text-blue-600 font-bold' : 'text-slate-500 hover:bg-slate-300'}`}
+                    className={`text-[10px] px-2 py-1 rounded ${maxTimeScale === scale ? 'bg-white dark:bg-slate-700 shadow text-blue-600 dark:text-blue-300 font-bold' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600'}`}
                   >
                     {scale === 360 ? '6h' : scale === 720 ? '12h' : '24h'}
                   </button>
@@ -1735,7 +1750,7 @@ const App = () => {
                   max="2880"
                   value={simDuration}
                   onChange={(e) => setSimDuration(Number(e.target.value))}
-                  className="w-16 text-right text-xs border border-slate-300 rounded p-1 pr-1 font-mono focus:ring-1 focus:ring-blue-400 outline-none"
+                  className="w-16 text-right text-xs border border-slate-300 dark:border-slate-600 rounded p-1 pr-1 font-mono focus:ring-1 focus:ring-blue-400 outline-none"
                 />
               </div>
             </div>
@@ -1745,10 +1760,10 @@ const App = () => {
             savedTraces.length > 0 && (
               <div className="mt-4 flex flex-wrap gap-2">
                 {savedTraces.map(t => (
-                  <div key={t.id} className="flex items-center gap-2 bg-slate-100 px-2 py-1 rounded-full text-xs border border-slate-200">
+                  <div key={t.id} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-full text-xs border border-slate-200 dark:border-slate-700">
                     <div className="w-2 h-2 rounded-full" style={{ background: t.color }}></div>
                     <span className="font-medium">{t.name}</span>
-                    <button onClick={() => removeTrace(t.id)} className="text-slate-400 hover:text-red-500"><X className="w-3 h-3" /></button>
+                    <button onClick={() => removeTrace(t.id)} className="text-slate-400 dark:text-slate-500 hover:text-red-500"><X className="w-3 h-3" /></button>
                   </div>
                 ))}
               </div>
@@ -1759,45 +1774,45 @@ const App = () => {
         {/* --- SUMMARY METRICS --- */}
         {summaryMetrics && simData.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <div className="bg-white border border-pink-200 rounded-lg p-2.5 shadow-sm">
+            <div className="bg-white dark:bg-slate-900 border border-pink-200 dark:border-pink-900/40 rounded-lg p-2.5 shadow-sm">
               <div className="text-[10px] uppercase font-bold text-pink-600 tracking-wide">{t('summaryPeakCe')}</div>
               <div className="text-xl font-bold text-pink-700 font-mono leading-tight">
                 {(summaryMetrics.peakCe.value / summaryMetrics.displayDivisor).toFixed(2)}
               </div>
-              <div className="text-[10px] text-slate-500">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500">
                 {summaryMetrics.displayUnit} {t('summaryAt')} {summaryMetrics.peakCe.time}{t('summaryMin')}
               </div>
             </div>
 
-            <div className="bg-white border border-emerald-200 rounded-lg p-2.5 shadow-sm">
+            <div className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900/40 rounded-lg p-2.5 shadow-sm">
               <div className="text-[10px] uppercase font-bold text-emerald-600 tracking-wide">
                 {summaryMetrics.isSedative ? 'BIS Onset' : t('summaryOnset')}
               </div>
               <div className="text-xl font-bold text-emerald-700 font-mono leading-tight">
                 {summaryMetrics.onsetTime !== null ? `${summaryMetrics.onsetTime}` : '—'}
               </div>
-              <div className="text-[10px] text-slate-500">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500">
                 {summaryMetrics.onsetTime !== null
                   ? `${t('summaryMin')} (Ce ≥ ${summaryMetrics.onsetThreshold})`
                   : t('summaryNotReached')}
               </div>
             </div>
 
-            <div className="bg-white border border-red-200 rounded-lg p-2.5 shadow-sm">
+            <div className="bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900/40 rounded-lg p-2.5 shadow-sm">
               <div className="text-[10px] uppercase font-bold text-red-600 tracking-wide">
                 {summaryMetrics.isSedative ? 'Deep sedation' : t('summaryRespRisk')}
               </div>
               <div className="text-xl font-bold text-red-700 font-mono leading-tight">
                 {summaryMetrics.respRiskMin}
               </div>
-              <div className="text-[10px] text-slate-500">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500">
                 {summaryMetrics.respRiskThreshold != null
                   ? `${t('summaryMin')} (Ce ≥ ${summaryMetrics.respRiskThreshold})`
                   : '—'}
               </div>
             </div>
 
-            <div className="bg-white border border-purple-200 rounded-lg p-2.5 shadow-sm">
+            <div className="bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-900/40 rounded-lg p-2.5 shadow-sm">
               <div className="text-[10px] uppercase font-bold text-purple-600 tracking-wide">
                 {summaryMetrics.recoveryTime !== null ? t('summaryRecovery') : t('summaryTotalDose')}
               </div>
@@ -1806,7 +1821,7 @@ const App = () => {
                   ? summaryMetrics.recoveryTime
                   : summaryMetrics.totalDose.toFixed(summaryMetrics.totalDose < 1 ? 2 : 1)}
               </div>
-              <div className="text-[10px] text-slate-500">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500">
                 {summaryMetrics.recoveryTime !== null
                   ? `${t('summaryMin')} after stop`
                   : summaryMetrics.drugUnit}
@@ -1820,14 +1835,14 @@ const App = () => {
 
           {/* Left Column: Patient & Model (4 cols) */}
           < div className="lg:col-span-4 space-y-4" >
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-2 mb-3 text-emerald-600 border-b pb-2">
                 <Settings className="h-4 w-4" />
                 <h3 className="font-bold text-sm">{t('drugModelSelection')}</h3>
               </div>
               <div className="space-y-3 text-sm">
                 <div>
-                  <label className="text-slate-500 text-xs block mb-1">{t('drug')}</label>
+                  <label className="text-slate-500 dark:text-slate-400 dark:text-slate-500 text-xs block mb-1">{t('drug')}</label>
                   <select value={drug} onChange={handleDrugChange} className="w-full border rounded p-2 font-medium bg-emerald-50 text-emerald-900 border-emerald-200">
                     <optgroup label={t('optgroupOpioids')}>
                       <option value="Fentanyl">Fentanyl (mcg)</option>
@@ -1846,7 +1861,7 @@ const App = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="text-slate-500 text-xs block mb-1">{t('pkModel')}</label>
+                  <label className="text-slate-500 dark:text-slate-400 dark:text-slate-500 text-xs block mb-1">{t('pkModel')}</label>
                   <select value={model} onChange={e => setModel(e.target.value)} className="w-full border rounded p-2">
                     {/* Phase 5-H-5: explicit value attrs keep state-matching stable across languages.
                         Only the localisable Adult/Pediatric descriptors are translated; author
@@ -1897,7 +1912,7 @@ const App = () => {
 
                 {/* Model Params Display */}
                 {parameters && (
-                  <div className="grid grid-cols-3 gap-1 text-[10px] text-slate-400 font-mono mt-2 bg-slate-50 p-1 rounded">
+                  <div className="grid grid-cols-3 gap-1 text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-2 bg-slate-50 dark:bg-slate-800 p-1 rounded">
                     <span>V1:{parameters.V1.toFixed(1)}L</span>
                     <span>Cl:{parameters.Cl.toFixed(2)}L/m</span>
                     <span>ke0:{parameters.ke0}</span>
@@ -1921,7 +1936,7 @@ const App = () => {
           < div className="lg:col-span-8 space-y-4" >
             {/* Dosing Inputs */}
             < div className="grid grid-cols-1 md:grid-cols-2 gap-4" >
-              <div className={`p-4 rounded-xl shadow-sm border transition-colors ${editingId === 'bolus' ? 'bg-purple-50 border-purple-200' : 'bg-white border-slate-200'}`}>
+              <div className={`p-4 rounded-xl shadow-sm border transition-colors ${editingId === 'bolus' ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'}`}>
                 <div className="flex items-center gap-2 mb-3 text-purple-600">
                   <Syringe className="h-4 w-4" />
                   <h3 className="font-bold text-sm">
@@ -1930,15 +1945,15 @@ const App = () => {
                 </div>
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
-                    <label className="text-[10px] uppercase text-slate-400 font-bold">{t('dose')} ({getDoseUnit()})</label>
+                    <label className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold">{t('dose')} ({getDoseUnit()})</label>
                     <input type="number" min="0" value={bolusAmount} onChange={e => setBolusAmount(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 h-10 text-lg font-bold text-center text-purple-700" />
                   </div>
                   <div className="w-20">
-                    <label className="text-[10px] uppercase text-slate-400 font-bold flex justify-between items-center mb-0.5">
+                    <label className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold flex justify-between items-center mb-0.5">
                       <span>{t('time')}</span>
                       <button
                         onClick={() => setBolusTime(isClockMode && currentSimMinutes !== null ? currentSimMinutes : 0)}
-                        className="text-[9px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-1.5 rounded border border-slate-200 flex items-center gap-0.5 ml-1 transition-colors"
+                        className="text-[9px] bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-0.5 ml-1 transition-colors"
                         title={t('now')}
                       >
                         {t('now')}
@@ -1956,9 +1971,9 @@ const App = () => {
                     )}
                     {isClockMode && (
                       <div className="flex gap-px mt-0.5">
-                        <button onClick={() => setBolusTime(Math.max(0, (currentSimMinutes ?? bolusTime) - 30))} className="flex-1 text-[8px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded border border-slate-200">{t('minus30m')}</button>
-                        <button onClick={() => setBolusTime(Math.max(0, (currentSimMinutes ?? bolusTime) - 60))} className="flex-1 text-[8px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded border border-slate-200">{t('minus1h')}</button>
-                        <button onClick={() => setBolusTime(Math.max(0, (currentSimMinutes ?? bolusTime) - 120))} className="flex-1 text-[8px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded border border-slate-200">{t('minus2h')}</button>
+                        <button onClick={() => setBolusTime(Math.max(0, (currentSimMinutes ?? bolusTime) - 30))} className="flex-1 text-[8px] bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700">{t('minus30m')}</button>
+                        <button onClick={() => setBolusTime(Math.max(0, (currentSimMinutes ?? bolusTime) - 60))} className="flex-1 text-[8px] bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700">{t('minus1h')}</button>
+                        <button onClick={() => setBolusTime(Math.max(0, (currentSimMinutes ?? bolusTime) - 120))} className="flex-1 text-[8px] bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700">{t('minus2h')}</button>
                       </div>
                     )}
                   </div>
@@ -1968,7 +1983,7 @@ const App = () => {
                 </div>
               </div>
 
-              <div className={`p-4 rounded-xl shadow-sm border transition-colors ${editingId === 'infusion' ? 'bg-orange-50 border-orange-200' : 'bg-white border-slate-200'}`}>
+              <div className={`p-4 rounded-xl shadow-sm border transition-colors ${editingId === 'infusion' ? 'bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'}`}>
                 <div className="flex items-center gap-2 mb-3 text-orange-600">
                   <Clock className="h-4 w-4" />
                   <h3 className="font-bold text-sm">
@@ -1977,12 +1992,12 @@ const App = () => {
                 </div>
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
-                    <label className="text-[10px] uppercase text-slate-400 font-bold flex justify-between">
+                    <label className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold flex justify-between">
                       <span>{t('rate')}</span>
                       <select
                         value={infusionUnit}
                         onChange={e => handleInfusionUnitChange(e.target.value)}
-                        className="text-[9px] border-none bg-transparent p-0 text-right pr-4 font-mono text-slate-500 cursor-pointer focus:ring-0 outline-none"
+                        className="text-[9px] border-none bg-transparent p-0 text-right pr-4 font-mono text-slate-500 dark:text-slate-400 dark:text-slate-500 cursor-pointer focus:ring-0 outline-none"
                         style={{ textAlignLast: 'right' }}
                       >
                         {DRUG_UNITS[drug]?.map(u => <option key={u} value={u}>{u}</option>)}
@@ -1991,11 +2006,11 @@ const App = () => {
                     <input type="number" min="0" value={infusionRate} onChange={e => setInfusionRate(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 h-10 text-lg font-bold text-center text-orange-700" />
                   </div>
                   <div className="w-16">
-                    <label className="text-[10px] uppercase text-slate-400 font-bold flex justify-between items-center mb-0.5">
+                    <label className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold flex justify-between items-center mb-0.5">
                       <span>{t('start')}</span>
                       <button
                         onClick={() => setInfusionStartTime(isClockMode && currentSimMinutes !== null ? currentSimMinutes : 0)}
-                        className="text-[9px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-1.5 rounded border border-slate-200 flex items-center gap-0.5 -mr-1 transition-colors"
+                        className="text-[9px] bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-0.5 -mr-1 transition-colors"
                         title={t('now')}
                       >
                         {t('now')}
@@ -2013,22 +2028,22 @@ const App = () => {
                     )}
                     {isClockMode && (
                       <div className="flex gap-px mt-0.5">
-                        <button onClick={() => setInfusionStartTime(Math.max(0, (currentSimMinutes ?? infusionStartTime) - 30))} className="flex-1 text-[8px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded border border-slate-200">{t('minus30m')}</button>
-                        <button onClick={() => setInfusionStartTime(Math.max(0, (currentSimMinutes ?? infusionStartTime) - 60))} className="flex-1 text-[8px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded border border-slate-200">{t('minus1h')}</button>
-                        <button onClick={() => setInfusionStartTime(Math.max(0, (currentSimMinutes ?? infusionStartTime) - 120))} className="flex-1 text-[8px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded border border-slate-200">{t('minus2h')}</button>
+                        <button onClick={() => setInfusionStartTime(Math.max(0, (currentSimMinutes ?? infusionStartTime) - 30))} className="flex-1 text-[8px] bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700">{t('minus30m')}</button>
+                        <button onClick={() => setInfusionStartTime(Math.max(0, (currentSimMinutes ?? infusionStartTime) - 60))} className="flex-1 text-[8px] bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700">{t('minus1h')}</button>
+                        <button onClick={() => setInfusionStartTime(Math.max(0, (currentSimMinutes ?? infusionStartTime) - 120))} className="flex-1 text-[8px] bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700">{t('minus2h')}</button>
                       </div>
                     )}
                   </div>
                   <div className="w-24">
-                    <label className="text-[10px] uppercase text-slate-400 font-bold flex flex-col">
+                    <label className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold flex flex-col">
                       <span>{t('duration')}</span>
                       <label className="flex items-center gap-0.5 cursor-pointer">
                         <input type="checkbox" checked={isInfiniteDuration} onChange={e => setIsInfiniteDuration(e.target.checked)} className="accent-orange-600 w-3 h-3" />
-                        <span className="text-[9px] normal-case whitespace-nowrap text-slate-600">{t('indefinite')}</span>
+                        <span className="text-[9px] normal-case whitespace-nowrap text-slate-600 dark:text-slate-300">{t('indefinite')}</span>
                       </label>
                     </label>
                     {isInfiniteDuration ? (
-                      <div className="w-full border rounded px-1 text-center text-slate-400 bg-slate-50 text-xl flex items-center justify-center h-10">∞</div>
+                      <div className="w-full border rounded px-1 text-center text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800 text-xl flex items-center justify-center h-10">∞</div>
                     ) : (
                       isClockMode ? (
                         <input
@@ -2055,25 +2070,25 @@ const App = () => {
             </div >
 
             {/* Event List */}
-            < div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" >
-              <div className="bg-slate-50 p-2 px-4 border-b border-slate-200 flex justify-between items-center">
-                <h3 className="font-bold text-sm text-slate-600">{t('currentSchedule')}</h3>
+            < div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden" >
+              <div className="bg-slate-50 dark:bg-slate-800 p-2 px-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                <h3 className="font-bold text-sm text-slate-600 dark:text-slate-300">{t('currentSchedule')}</h3>
                 <button onClick={() => setEvents([])} className="text-xs text-red-500 hover:underline">{t('clearAll')}</button>
               </div>
               <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
-                {events.length === 0 && <div className="p-4 text-center text-slate-400 text-xs">{t('noHistory')}</div>}
+                {events.length === 0 && <div className="p-4 text-center text-slate-400 dark:text-slate-500 text-xs">{t('noHistory')}</div>}
                 {events.sort((a, b) => a.time - b.time).map(evt => {
                   const evtDrug = evt.drug || drug;
                   const evtUnit = getDoseUnitForDrug(evtDrug);
                   const evtShort = DRUG_SHORT_NAMES[evtDrug] || evtDrug;
                   const evtColors = DRUG_COLORS[evtDrug] || { ce: '#a855f7' };
                   return (
-                  <div key={evt.id} className="p-2 px-4 flex justify-between items-center text-sm hover:bg-slate-50">
+                  <div key={evt.id} className="p-2 px-4 flex justify-between items-center text-sm hover:bg-slate-50 dark:hover:bg-slate-800">
                     <div className="flex items-center gap-3">
                       {evt.type === 'bolus' ? <Syringe className="w-4 h-4" style={{ color: evtColors.ce }} /> : <Activity className="w-4 h-4" style={{ color: evtColors.ce }} />}
                       <span className="text-[10px] font-bold rounded px-1.5 py-0.5" style={{ backgroundColor: evtColors.ce + '22', color: evtColors.ce }}>{evtShort}</span>
-                      <span className="font-mono text-slate-500 w-12 text-right">{evt.time} min</span>
-                      <span className="font-medium text-slate-700">
+                      <span className="font-mono text-slate-500 dark:text-slate-400 dark:text-slate-500 w-12 text-right">{evt.time} min</span>
+                      <span className="font-medium text-slate-700 dark:text-slate-200">
                         {evt.type === 'bolus' ? `${t('bolusLabel')}: ${evt.amount} ${evtUnit}` :
                           `${t('infusionLabel')}: ${evt.originalRate || evt.rate} ${evt.originalUnit || (evtUnit + '/hr')} (${evt.duration}min)`}
                       </span>
@@ -2092,23 +2107,23 @@ const App = () => {
         </div >
 
         {/* --- QUICK PRESETS --- (relocated to bottom; rarely used in routine OR flow) */}
-        <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
+        <div className="bg-white dark:bg-slate-900 p-3 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2 text-blue-600">
               <Wand2 className="h-4 w-4" />
               <h3 className="font-bold text-sm">{t('presetsTitle')}</h3>
             </div>
-            <span className="text-[10px] text-slate-400">{t('presetTooltip')}</span>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500">{t('presetTooltip')}</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
             {QUICK_PRESETS.map(preset => (
               <button
                 key={preset.id}
                 onClick={() => applyPreset(preset)}
-                className="text-xs px-2 py-2 rounded-lg border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors text-left"
+                className="text-xs px-2 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 hover:border-blue-300 transition-colors text-left"
               >
-                <div className="font-bold text-slate-700 leading-tight">{t(preset.labelKey)}</div>
-                <div className="text-[10px] text-slate-400 mt-0.5">{preset.drug}</div>
+                <div className="font-bold text-slate-700 dark:text-slate-200 leading-tight">{t(preset.labelKey)}</div>
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{preset.drug}</div>
               </button>
             ))}
           </div>
