@@ -52,12 +52,15 @@ const computeCeFromCp = (sim, ke0) => {
   });
 };
 
-const SedationTooltip = ({ active, payload, label, events, drug, isClockMode, startTime, displayUnit }) => {
+const SedationTooltip = ({ active, payload, label, events, drug, isClockMode, startTime, displayUnit, timeZeroMinute = 0 }) => {
   if (!active || !payload || payload.length === 0) return null;
   const time = Number(label);
+  const relMin = time - timeZeroMinute;
   const headerLabel = isClockMode
     ? `${minutesToTime(time, startTime)} (${time} min)`
-    : `${time} min`;
+    : timeZeroMinute > 0
+      ? `${relMin >= 0 ? '+' : ''}${relMin} min (T${time})`
+      : `${time} min`;
 
   const nearbyEvents = events.filter((e) => {
     if (e.type === 'bolus') return Math.abs(e.time - time) <= 0.5;
@@ -145,6 +148,8 @@ export default function SedationChart({
   // Phase 5-I-1: shared theme colours from App.jsx so the Recharts axis / grid /
   // tooltip border match the active light/dark mode without each chart re-deriving them.
   chartColors,
+  // Phase 5-J-2: display-only X-axis offset (0 = sim start). Forwarded from App.jsx.
+  timeZeroMinute = 0,
 }) {
   const { t } = useTranslation();
   const range = THERAPEUTIC_RANGES[drug] || {};
@@ -481,7 +486,7 @@ export default function SedationChart({
               domain={[0, simDuration]}
               tickCount={10}
               allowDataOverflow
-              tickFormatter={(val) => isClockMode ? minutesToTime(val, startTime) : val}
+              tickFormatter={(val) => isClockMode ? minutesToTime(val, startTime) : (timeZeroMinute > 0 ? (val - timeZeroMinute) : val)}
               fontSize={10}
               stroke={chartColors?.axisStroke}
             />
@@ -502,6 +507,7 @@ export default function SedationChart({
                   isClockMode={isClockMode}
                   startTime={startTime}
                   displayUnit={displayUnit}
+                  timeZeroMinute={timeZeroMinute}
                 />
               }
             />

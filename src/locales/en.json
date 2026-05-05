@@ -92,5 +92,8 @@
     "yModeFull": "Full",
     "yModeTherapeutic": "Therapeutic",
     "yModeCustom": "Custom",
-    "peakExceedsRange": "↑ Peak {{value}} {{unit}} @ {{time}}min — exceeds visible range"
+    "peakExceedsRange": "↑ Peak {{value}} {{unit}} @ {{time}}min — exceeds visible range",
+    "timeZero": "Time zero",
+    "timeZeroNone": "Sim start",
+    "timeZeroResetTooltip": "Reset to simulation start"
 }

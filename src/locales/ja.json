@@ -92,5 +92,8 @@
     "yModeFull": "全範囲",
     "yModeTherapeutic": "治療域",
     "yModeCustom": "手動",
-    "peakExceedsRange": "↑ ピーク {{value}} {{unit}} @ {{time}}分 — 表示範囲外"
+    "peakExceedsRange": "↑ ピーク {{value}} {{unit}} @ {{time}}分 — 表示範囲外",
+    "timeZero": "時間原点",
+    "timeZeroNone": "Sim開始",
+    "timeZeroResetTooltip": "シミュレーション開始時刻に戻す"
 }

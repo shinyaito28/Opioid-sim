@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea, Label } from 'recharts';
-import { Syringe, Clock, Settings, User, Activity, Plus, Trash2, Save, X, Eye, EyeOff, ZoomIn, Baby, Edit2, AlertCircle, Wand2, Info, FileText, Layers, FolderOpen, Download, MousePointerClick } from 'lucide-react';
+import { Syringe, Clock, Settings, User, Activity, Plus, Trash2, Save, X, Eye, EyeOff, ZoomIn, Baby, Edit2, AlertCircle, Wand2, Info, FileText, Layers, FolderOpen, Download, MousePointerClick, RotateCcw } from 'lucide-react';
 import TopBar from './components/TopBar';
 import QuickEntry from './components/QuickEntry';
 import SedationChart from './components/SedationChart';
@@ -39,12 +39,15 @@ import { useDarkMode } from './hooks/useDarkMode';
 
 // Custom Recharts tooltip — keeps default Cp/Ce values, then lists any dosing events at/near the hover time.
 // Multi-drug: each event is labelled with its own drug short name + per-drug unit (read from evt.drug).
-const ChartTooltip = ({ active, payload, label, events, isClockMode, startTime }) => {
+const ChartTooltip = ({ active, payload, label, events, isClockMode, startTime, timeZeroMinute = 0 }) => {
   if (!active || !payload || payload.length === 0) return null;
   const time = Number(label);
+  const relMin = time - timeZeroMinute;
   const headerLabel = isClockMode
     ? `${minutesToTime(time, startTime)} (${time} min)`
-    : `${time} min`;
+    : timeZeroMinute > 0
+      ? `${relMin >= 0 ? '+' : ''}${relMin} min (T${time})`
+      : `${time} min`;
 
   const nearbyEvents = events.filter((e) => {
     if (e.type === 'bolus') return Math.abs(e.time - time) <= 0.5;
@@ -272,6 +275,10 @@ const App = () => {
   const [yAxisMode, setYAxisMode] = useState('therapeutic'); // 'full' | 'therapeutic' | 'custom'
   const [isClockMode, setIsClockMode] = useState(false);
   const [startTime, setStartTime] = useState("09:00");
+  // Phase 5-J-2: display-only X-axis origin offset. event.time is unchanged; only
+  // tick labels and the tooltip header subtract this. 0 = sim-start origin (default).
+  // Mutually exclusive with isClockMode (clock-mode owns absolute time semantics).
+  const [timeZeroMinute, setTimeZeroMinute] = useState(0);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
@@ -1408,7 +1415,7 @@ const App = () => {
                   domain={[0, simDuration]}
                   tickCount={10}
                   allowDataOverflow
-                  tickFormatter={(val) => isClockMode ? minutesToTime(val, startTime) : val}
+                  tickFormatter={(val) => isClockMode ? minutesToTime(val, startTime) : (timeZeroMinute > 0 ? (val - timeZeroMinute) : val)}
                   stroke={chartColors.axisStroke}
                 />
                 <YAxis
@@ -1440,6 +1447,7 @@ const App = () => {
                       events={events}
                       isClockMode={isClockMode}
                       startTime={startTime}
+                      timeZeroMinute={timeZeroMinute}
                     />
                   }
                 />
@@ -1719,6 +1727,7 @@ const App = () => {
                   onEventTimeChange={handleEventTimeChange}
                   onEventDurationChange={handleEventDurationChange}
                   chartColors={chartColors}
+                  timeZeroMinute={timeZeroMinute}
                 />
               ))}
             </div>
@@ -1758,6 +1767,38 @@ const App = () => {
                   />
                 )
               }
+
+              {/* Phase 5-J-2: time-zero (any event or sim start) for relative X-axis labels.
+                  Mutually exclusive with clock mode — clock mode owns absolute time. */}
+              {!isClockMode && (
+                <div className="flex items-center gap-1 text-xs">
+                  <span className="text-slate-500 dark:text-slate-400 whitespace-nowrap">{t('timeZero')}:</span>
+                  <select
+                    value={timeZeroMinute}
+                    onChange={(e) => setTimeZeroMinute(Number(e.target.value))}
+                    className="text-[11px] border border-slate-300 dark:border-slate-600 rounded px-1 py-0.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                  >
+                    <option value={0}>{t('timeZeroNone')}</option>
+                    {events.map((ev) => {
+                      const short = DRUG_SHORT_NAMES[ev.drug || drug] || (ev.drug || drug);
+                      const evtUnit = getDoseUnitForDrug(ev.drug || drug);
+                      const label = ev.type === 'bolus'
+                        ? `▼ ${short} ${ev.amount}${evtUnit} @ ${ev.time}min`
+                        : `▶ ${short} ${ev.originalRate ?? ev.rate}${ev.originalUnit ? ` ${ev.originalUnit}` : '/hr'} @ ${ev.time}min`;
+                      return <option key={ev.id} value={ev.time}>{label}</option>;
+                    })}
+                  </select>
+                  {timeZeroMinute > 0 && (
+                    <button
+                      onClick={() => setTimeZeroMinute(0)}
+                      className="text-slate-500 dark:text-slate-400 hover:text-blue-600 p-0.5"
+                      title={t('timeZeroResetTooltip')}
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              )}
 
 
               <div className="flex bg-slate-200 dark:bg-slate-700 rounded-lg p-0.5 gap-0.5">
