@@ -15,44 +15,62 @@ export const THERAPEUTIC_RANGES = {
     label: 'Analgesia (0.5-2.5) / Resp C50: 2.3'
   },
   'Remifentanil': {
-    // No reliable single-source C50 for resp depression located on PubMed (2026-04 verification).
-    // Babenco HT et al. Anesthesiology 2000;92:393-398 (PMID:10691225) is conventionally cited
-    // for ventilatory effects but reports apnea threshold at higher Ce. Current value is consensus/textbook.
-    analgesiaMin: 3.0,
+    // Phase 5-K-1 update: respiratoryRisk Ce50 verified from Babenco HD et al. Anesthesiology
+    // 2000;92:393-398 (PMID:10691225) — EC50 = 1.12 ng/mL for ventilatory depression in 8 healthy
+    // volunteers. Analgesic range 1-8 ng/mL spans postop PCA threshold up through TIVA surgical
+    // depths (Ce values in full text of Egan 1996, PMID:8638836; abstract-level numbers sparse).
+    // Old values (3.0-8.0 / 2.5) were textbook consensus. See therapeuticReferences.js.
+    analgesiaMin: 1.0,
     analgesiaMax: 8.0,
-    respiratoryRisk: 2.5,
-    label: 'Surgical (3.0-8.0)'
+    respiratoryRisk: 1.1,
+    label: 'Analgesia (1.0-8.0) / Resp C50: 1.1 (Babenco 2000)'
   },
   'Morphine': {
-    // No reliable respiratory-depression C50 located on PubMed; range 20-40 ng/mL often cited
-    // (Lötsch et al. work). Current 30 ng/mL is consensus/textbook. Flag for review.
-    analgesiaMin: 10,
-    analgesiaMax: 40,
-    respiratoryRisk: 30,
-    label: 'Analgesia (10-40)'
+    // Phase 5-K-1 update: analgesia 20-80 ng/mL from Owen 1985 PCA study (PMID:3156020) —
+    // patients defined MEAC of 20-40 ng/mL, max self-administered 82 ng/mL. Respiratory C50
+    // ~9 ng/mL from Dahan 2004 (PMID:15505457) integrated NONMEM analysis: potency parameter
+    // 32 nM ≈ 9 ng/mL morphine free base, supported by Romberg 2003 (PMID:14508308).
+    // Note: Dahan 2004 found analgesia and respiratory potency are essentially equal —
+    // therapeutic dosing routinely sits well above respiratory C50.
+    analgesiaMin: 20,
+    analgesiaMax: 80,
+    respiratoryRisk: 10,
+    label: 'Analgesia (20-80) / Resp C50: ~9-10 (Dahan 2004)'
   },
   'Hydromorphone': {
-    // No reliable C50 source located. Current value is consensus/textbook. Flag for review.
-    analgesiaMin: 4.0,
-    analgesiaMax: 15.0,
-    respiratoryRisk: 10.0,
-    label: 'Analgesia (4.0-15.0)'
+    // Phase 5-K-1 update: analgesia anchored to Olofsen 2026 BJA (PMID:41656122) — limit-
+    // temperature modeling gave hydromorphone potency 4.4 ng/mL in 51 volunteers. Clinical
+    // postop PCA range 2-8 ng/mL covers analgesia onset through near-peak. Respiratory Ce50
+    // (1.0 ng/mL) is EXTRAPOLATED from Olofsen morphine:hydromorphone 10:1 potency ratio
+    // applied to Dahan 2004 morphine resp Ce50 ≈ 9 ng/mL — see therapeuticReferences.js
+    // (provisional flag set; abstract-level direct hydromorphone respiratory Ce50 is sparse).
+    analgesiaMin: 2.0,
+    analgesiaMax: 8.0,
+    respiratoryRisk: 1.0,
+    label: 'Analgesia (2.0-8.0) / Resp C50: ~1.0 (Olofsen 2026 ext.)'
   },
   'Methadone': {
-    // No reliable C50 source located; methadone interindividual variability + QT issues complicate
-    // a single C50. Current value is consensus/textbook. Flag for review.
-    analgesiaMin: 50,
-    analgesiaMax: 100,
-    respiratoryRisk: 200,
-    label: 'Analgesia (50-100) / Resp Risk > 200'
+    // Phase 5-K-1 update: analgesia Css50 ~290-359 ng/mL from Inturrisi 1987/1990
+    // (PMID:3829576, PMID:2188771) in cancer pain patients. Range 100-400 ng/mL covers
+    // typical chronic-pain titration. Respiratory C50 is INFERRED from sedation Css50
+    // (336 ng/mL ≈ analgesia Css50 in same paper) — no primary respiratory C50 paper with
+    // abstract-level numbers located. Provisional flag set in therapeuticReferences.js.
+    // Methadone individual variability is huge (Inturrisi range 40-1130 ng/mL) and QT
+    // prolongation is a separate non-Ce concern.
+    analgesiaMin: 100,
+    analgesiaMax: 400,
+    respiratoryRisk: 400,
+    label: 'Analgesia (100-400) / Resp Ce ~400 (Inturrisi 1990, inferred)'
   },
   'Sufentanil': {
-    // Bailey PL et al. work cited at ~0.05-0.5 ng/mL range historically; no single canonical
-    // resp-C50 source verified. Current value is consensus/textbook. Flag for review.
-    analgesiaMin: 0.2,
-    analgesiaMax: 0.6,
+    // Phase 5-K-1 update: MEAC 0.03 ng/mL from Lehmann 1991 (PMID:1674829) — explicitly
+    // stated minimum threshold for analgesia in postop PCA. Upper PCA range 0.5 ng/mL.
+    // Respiratory Ce50 ~0.5 ng/mL from Bailey 1990 (PMID:2136976) — abstract describes
+    // qualitative comparison vs fentanyl, numeric Ce50 in full text only.
+    analgesiaMin: 0.03,
+    analgesiaMax: 0.5,
     respiratoryRisk: 0.5,
-    label: 'Analgesia (0.2-0.6)'
+    label: 'Analgesia (0.03-0.5) / Resp C50 ~0.5 (Lehmann 1991, Bailey 1990)'
   },
   'Propofol': {
     // Sedative — therapeutic Ce typically 1.5-4.5 mcg/mL for sedation, 3-6 for GA (BIS 40-60).
