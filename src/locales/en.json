@@ -109,5 +109,16 @@
     "resetDisplayTooltip": "Reset axes / time-zero / display modes to defaults (events and patient unchanged)",
     "rangeLabel": "Range:",
     "customRange": "CUSTOM",
-    "rangeRevertTooltip": "Revert to literature default"
+    "rangeRevertTooltip": "Revert to literature default",
+    "viewLiteratureLabel": "Refs",
+    "viewLiteratureTooltip": "Show literature references for this drug's therapeutic range",
+    "therapeuticReferenceTitle": "Therapeutic Reference",
+    "appliedRange": "Applied range",
+    "analgesiaSection": "Analgesia",
+    "respDepressionSection": "Respiratory depression",
+    "summarySection": "Summary",
+    "caveatsSection": "Caveats",
+    "viewOnPubmed": "View on PubMed",
+    "noReferenceData": "No literature reference data available for this drug.",
+    "provisionalWarning": "Some Ce values for this drug are extrapolated or inferred — primary literature with abstract-level Ce50 was not located. Treat numeric ranges as guidance, not precision."
 }

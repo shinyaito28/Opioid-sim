@@ -7,6 +7,7 @@ import TopBar from './components/TopBar';
 import QuickEntry from './components/QuickEntry';
 import SedationChart from './components/SedationChart';
 import ChartEventPopover from './components/ChartEventPopover';
+import TherapeuticReferenceModal from './components/TherapeuticReferenceModal';
 import {
   THERAPEUTIC_RANGES,
   DRUG_UNITS,
@@ -292,6 +293,8 @@ const App = () => {
   // defaults from THERAPEUTIC_RANGES. Override only the analgesia band (analgesiaMin,
   // analgesiaMax); respiratoryRisk stays literature-based since it is a safety value.
   const [therapeuticOverrides, setTherapeuticOverrides] = useState({});
+  // Phase 5-K-2: therapeutic-reference modal toggle. Triggered by ⓘ button next to drug select.
+  const [referenceModalOpen, setReferenceModalOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
@@ -2102,7 +2105,19 @@ const App = () => {
               </div>
               <div className="space-y-3 text-sm">
                 <div>
-                  <label className="text-slate-500 dark:text-slate-400 dark:text-slate-500 text-xs block mb-1">{t('drug')}</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-slate-500 dark:text-slate-400 dark:text-slate-500 text-xs">{t('drug')}</label>
+                    {/* Phase 5-K-2: literature reference modal trigger. */}
+                    <button
+                      onClick={() => setReferenceModalOpen(true)}
+                      className="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 p-0.5 rounded flex items-center gap-0.5"
+                      title={t('viewLiteratureTooltip')}
+                      aria-label={t('viewLiteratureTooltip')}
+                    >
+                      <Info className="w-3.5 h-3.5" />
+                      <span className="text-[10px] uppercase tracking-wide">{t('viewLiteratureLabel')}</span>
+                    </button>
+                  </div>
                   <select value={drug} onChange={handleDrugChange} className="w-full border rounded p-2 font-medium bg-emerald-50 text-emerald-900 border-emerald-200">
                     <optgroup label={t('optgroupOpioids')}>
                       <option value="Fentanyl">Fentanyl (mcg)</option>
@@ -2389,6 +2404,13 @@ const App = () => {
           </div>
         </div>
       </main >
+
+      {/* Phase 5-K-2: literature reference modal — mounted at root so the backdrop covers the full viewport. */}
+      <TherapeuticReferenceModal
+        drug={drug}
+        open={referenceModalOpen}
+        onClose={() => setReferenceModalOpen(false)}
+      />
     </div >
   );
 };

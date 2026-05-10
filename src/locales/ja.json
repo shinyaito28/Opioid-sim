@@ -109,5 +109,16 @@
     "resetDisplayTooltip": "軸・時間原点・表示モードを初期値に戻す（投与と患者は不変）",
     "rangeLabel": "鎮痛帯:",
     "customRange": "手動",
-    "rangeRevertTooltip": "文献値に戻す"
+    "rangeRevertTooltip": "文献値に戻す",
+    "viewLiteratureLabel": "文献",
+    "viewLiteratureTooltip": "この薬剤の治療域の文献根拠を表示",
+    "therapeuticReferenceTitle": "治療域 文献根拠",
+    "appliedRange": "適用範囲",
+    "analgesiaSection": "鎮痛域",
+    "respDepressionSection": "呼吸抑制",
+    "summarySection": "要約",
+    "caveatsSection": "注意点",
+    "viewOnPubmed": "PubMed で見る",
+    "noReferenceData": "この薬剤の文献データはまだ整備されていません。",
+    "provisionalWarning": "この薬剤の Ce 値の一部は外挿または推定値です — abstract レベルの Ce50 を含む primary 文献が見つかっていません。数値範囲はガイダンスとして扱い、精度は期待しないでください。"
 }
