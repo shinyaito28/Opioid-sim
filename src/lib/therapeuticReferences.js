@@ -60,9 +60,9 @@ export const THERAPEUTIC_REFERENCES = {
         volumePage: '84:821-833',
         pmid: '8638836',
         url: 'https://pubmed.ncbi.nlm.nih.gov/8638836/',
-        keyFindings: 'PK/PD study of remifentanil in volunteers; analgesic Ce values are reported in the full text but not in the PubMed abstract. Surgical anesthesia Ce typically 4-8 ng/mL with co-induction.',
-        population: 'Healthy adult volunteers',
-        confidence: 'WEAK', // abstract has no abstract-extractable Ce numbers
+        keyFindings: 'PK/PD study using EEG spectral edge as the effect measure: remifentanil EEG EC50 = 19.9 ± 5.2 ng/mL (vs alfentanil 375.9 ng/mL, 18.9× more potent). t½ke0 = 1.6 min (k_e0 = 1.14/min) — very rapid effect-site equilibration. NOTE: This EC50 is for deep CNS depression (anesthesia depth), not analgesia. Surgical anesthesia clinical Ce 4-8 ng/mL (textbook/practice-based) is well below the EEG EC50.',
+        population: '10 healthy adult male volunteers, EEG-based PK/PD model',
+        confidence: 'WEAK', // EEG-based, not analgesia
       },
     ],
     respiratoryRiskCitations: [
@@ -137,9 +137,20 @@ export const THERAPEUTIC_REFERENCES = {
         population: 'Volunteers, hypoxic ventilatory response',
         confidence: 'SOLID',
       },
+      {
+        authors: 'Olofsen E et al.',
+        year: 2026,
+        journal: 'Br J Anaesth',
+        volumePage: '136:1459-1471',
+        pmid: '41656122',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/41656122/',
+        keyFindings: 'Physiological ventilatory model C50,Phys = 8.9 ng/mL (IQR 7.0–10.6) for 50% depression of the ventilatory controller output, with blood-effect-site t½ke0 = 4.7 h. Effect-site potency for respiratory rate decrease (C25,RR) = 14.9 ng/mL, end-expiratory CO2 (C1%) = 7.6 ng/mL. Directly measured in 51 healthy volunteers via NONMEM analysis.',
+        population: '51 healthy volunteers, 2-h infusion 0.05 mg/kg morphine, crossover design',
+        confidence: 'SOLID',
+      },
     ],
-    summaryEn: 'Morphine\'s analgesic and respiratory depressant potencies share roughly the same Ce (~9 ng/mL for 50% effect). The clinically targeted analgesic range (20-80 ng/mL) sits well above the respiratory C50 — which is exactly why morphine has a reputation for respiratory depression at therapeutic doses. The very slow keo (t½ 4.4 h) explains the delayed peak after IV bolus; wait before re-dosing.',
-    summaryJa: 'モルヒネは鎮痛効果と呼吸抑制の Ce がほぼ同じ (~9 ng/mL で 50% 効果)。臨床鎮痛域 20-80 ng/mL は呼吸抑制 C50 を遥かに超えるため、治療量で呼吸抑制が起きるのはこの薬理が原因。keo が極端に遅い (t½ 4.4 h) ため、IV bolus 後のピークが遅れる — 追加投与は十分待つ。',
+    summaryEn: 'Morphine\'s analgesic and respiratory depressant potencies share roughly the same Ce (~9 ng/mL for 50% effect — directly confirmed by Olofsen 2026 C50,Phys = 8.9 ng/mL and Dahan 2004 32nM ≈ 9 ng/mL). The clinically targeted analgesic range (20-80 ng/mL) sits well above the respiratory C50 — which is exactly why morphine has a reputation for respiratory depression at therapeutic doses. The very slow keo (t½ 4.4–4.7 h) explains the delayed peak after IV bolus; wait before re-dosing.',
+    summaryJa: 'モルヒネは鎮痛効果と呼吸抑制の Ce がほぼ同じ (~9 ng/mL で 50% 効果 — Olofsen 2026 C50,Phys = 8.9 ng/mL と Dahan 2004 の 32 nM 換算 ~9 ng/mL で直接確認済み)。臨床鎮痛域 20-80 ng/mL は呼吸抑制 C50 を遥かに超えるため、治療量で呼吸抑制が起きるのはこの薬理が原因。keo が極端に遅い (t½ 4.4-4.7 h) ため、IV bolus 後のピークが遅れる — 追加投与は十分待つ。',
     caveats: [
       { en: 'M6G (morphine-6-glucuronide) contributes additional respiratory depression, especially in renal impairment', ja: 'M6G (morphine-6-glucuronide) が腎機能低下時に追加で呼吸抑制を起こす' },
       { en: 'Analgesia γ ≈ 2.4 means dose-response is steep — small Ce changes give large analgesic shifts', ja: '鎮痛の γ ≈ 2.4 で用量反応が急峻 — わずかな Ce 変化で鎮痛効果が大きく動く' },
@@ -149,17 +160,17 @@ export const THERAPEUTIC_REFERENCES = {
   },
 
   Hydromorphone: {
-    appliedRange: { analgesiaMin: 2, analgesiaMax: 8, respiratoryRisk: 1.0 },
+    appliedRange: { analgesiaMin: 2, analgesiaMax: 8, respiratoryRisk: 3.4 },
     analgesiaCitations: [
       {
         authors: 'Olofsen E et al.',
         year: 2026,
         journal: 'Br J Anaesth',
-        volumePage: 'in press',
+        volumePage: '136:1459-1471',
         pmid: '41656122',
         url: 'https://pubmed.ncbi.nlm.nih.gov/41656122/',
-        keyFindings: 'Limit-temperature modelling gave separate morphine (46.9 ng/mL) and hydromorphone (4.4 ng/mL) analgesic potencies — ~10:1 morphine:hydromorphone potency ratio at the effect site.',
-        population: '51 healthy volunteers, balanced crossover, 0.2 mg/kg hydromorphone over 2 h, thermal pain stimulus',
+        keyFindings: 'Limit-temperature potency C1D = 4.4 ng/mL (IQR 3.4–5.5), VAS T50 potency C1D = 4.0 ng/mL (IQR 3.1–6.0). Morphine-to-hydromorphone potency ratios varied 1.2 (CO2) to 10.7 (limit temperature) across endpoints; HM consistently more potent.',
+        population: '51 healthy volunteers, balanced crossover, 0.05 mg/kg hydromorphone over 2 h, thermal pain stimulus + VAS',
         confidence: 'SOLID',
       },
       {
@@ -169,32 +180,32 @@ export const THERAPEUTIC_REFERENCES = {
         volumePage: '71:41-48',
         pmid: '9313274',
         url: 'https://pubmed.ncbi.nlm.nih.gov/9313274/',
-        keyFindings: 'Postoperative PCA hydromorphone — Ce ranges in full text only; supports clinical analgesic Ce ~2-8 ng/mL.',
-        population: 'Postoperative PCA',
+        keyFindings: 'Postoperative PCA HM vs morphine comparison in BMT patients; clinical PCA dose ratio HM:morphine ≈ 1:5 confirmed. No direct Ce50 numerical data — supports clinical 2-8 ng/mL range qualitatively.',
+        population: '34 postoperative BMT patients (PCA mucositis pain)',
         confidence: 'MODERATE',
       },
     ],
     respiratoryRiskCitations: [
       {
-        authors: 'Olofsen E et al. (extrapolated)',
+        authors: 'Olofsen E et al.',
         year: 2026,
         journal: 'Br J Anaesth',
-        volumePage: 'in press',
+        volumePage: '136:1459-1471',
         pmid: '41656122',
         url: 'https://pubmed.ncbi.nlm.nih.gov/41656122/',
-        keyFindings: 'Abstract describes integrated respiratory + analgesia modeling but does not separately quote a hydromorphone respiratory Ce50. Extrapolated from morphine resp Ce50 (~9 ng/mL) using the 10:1 potency ratio → ~1 ng/mL.',
-        population: 'Volunteers',
-        confidence: 'MODERATE',
+        keyFindings: 'Physiological ventilatory model C50,Phys = 3.4 ng/mL (IQR 2.8–4.0) for 50% depression of the ventilatory controller output, with t½ke0 = 2.2 h. Respiratory rate C25,RR = 4.1 ng/mL, end-expiratory CO2 C1% = 6.1 ng/mL. Hydromorphone is approximately 2.6× more potent than morphine for ventilatory depression (8.9 → 3.4 ng/mL). Directly measured in 51 healthy volunteers via NONMEM analysis.',
+        population: '51 healthy volunteers, 2-h infusion 0.05 mg/kg hydromorphone, crossover design',
+        confidence: 'SOLID',
       },
     ],
-    summaryEn: 'Hydromorphone is roughly 10× more potent than morphine on a Ce basis (Olofsen 2026 confirmed). Analgesic Ce 2-8 ng/mL covers most postoperative use. Respiratory C50 (~1 ng/mL) is extrapolated — primary abstract-level Ce50 data is sparse. Like morphine, the analgesic and respiratory potencies are similar, so the therapeutic window is narrow.',
-    summaryJa: 'ハイドロモルフォンはモルヒネの約10倍力価 (Ce ベース、Olofsen 2026 確認)。鎮痛 Ce 2-8 ng/mL が術後の主使用域。呼吸抑制 C50 (~1 ng/mL) はモルヒネとの potency ratio から外挿 — primary な abstract レベルの Ce50 データは少ない。モルヒネ同様、鎮痛と呼吸抑制の potency が近いため治療幅は狭い。',
+    summaryEn: 'Hydromorphone is approximately 2.6× more potent than morphine for respiratory depression (Olofsen 2026 C50,Phys = 3.4 vs 8.9 ng/mL) and 10× more potent for analgesia (limit-temperature endpoint). Clinical PCA analgesic Ce 2-8 ng/mL overlaps with the respiratory C50 — therapeutic window is narrow, similar to morphine. Faster onset than morphine (t½ke0 2.2 h vs 4.7 h for ventilatory effect) means peak effects arrive sooner after bolus.',
+    summaryJa: 'ハイドロモルフォンはモルヒネに対し呼吸抑制で約 2.6 倍、鎮痛 (限界温度) で約 10 倍の力価 (Olofsen 2026 直接測定; C50,Phys 3.4 vs 8.9 ng/mL)。臨床 PCA 鎮痛 Ce 2-8 ng/mL は呼吸抑制 C50 と重なり、モルヒネ同様に治療幅が狭い。呼吸 effect への t½ke0 は 2.2 h (vs morphine 4.7 h) で onset がやや速く、bolus 後のピーク到達も早い。',
     caveats: [
-      { en: 'Respiratory Ce50 is extrapolated from Olofsen morphine:hydromorphone potency ratio, not directly measured', ja: '呼吸抑制 Ce50 は Olofsen の morphine:hydromorphone potency 比から外挿、直接測定値ではない' },
+      { en: 'Respiratory Ce50 now directly measured (Olofsen 2026); previous extrapolation from morphine ratio is obsolete', ja: '呼吸抑制 Ce50 は直接測定値 (Olofsen 2026); 旧 extrapolation 値は廃止' },
       { en: 'Less metabolite-driven respiratory effect than morphine (no M6G analog)', ja: 'モルヒネと違い M6G に相当する活性代謝物による追加効果は無い' },
       { en: 'Faster onset than morphine but still much slower than fentanyl', ja: 'モルヒネより onset は速いが fentanyl より遥かに遅い' },
     ],
-    provisional: true, // Resp Ce50 extrapolated, not directly measured
+    provisional: false, // Phase 5-K-3: Olofsen 2026 directly measured C50,Phys = 3.4 ng/mL — flag removed
   },
 
   Methadone: {
@@ -225,26 +236,37 @@ export const THERAPEUTIC_REFERENCES = {
     ],
     respiratoryRiskCitations: [
       {
+        authors: 'Eap CB, Buclin T, Baumann P',
+        year: 2002,
+        journal: 'Clin Pharmacokinet',
+        volumePage: '41:1153-1193',
+        pmid: '12498726',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/12498726/',
+        keyFindings: 'Comprehensive PK review. MMT induction deaths in non-tolerant heroin users: plasma mean 710 ng/mL (range 300-2520 ng/mL). Inferred respiratory Ce50 ~400 ng/mL falls between sedation Css50 (336 ng/mL, Inturrisi 1990) and lethal plasma mean (710 ng/mL). 17-fold interindividual variation in plasma/dose ratio. QTc prolongation: ECG monitoring recommended for doses >500 mg/day (HERG IC50 = 3032 ng/mL — well above analgesic range).',
+        population: 'Review of MMT cohorts + 10 induction-phase fatalities',
+        confidence: 'MODERATE',
+      },
+      {
         authors: 'Inturrisi CE et al. (sedation Css50 as proxy)',
         year: 1990,
         journal: 'Clin Pharmacol Ther',
         volumePage: '47:565-577',
         pmid: '2188771',
         url: 'https://pubmed.ncbi.nlm.nih.gov/2188771/',
-        keyFindings: 'Sedation Css50 = 336 ng/mL ≈ analgesia Css50; respiratory Ce50 inferred to be in the same 300-450 ng/mL range. No primary respiratory C50 paper located on PubMed with abstract-level numbers.',
-        population: 'Inferred extrapolation',
+        keyFindings: 'Sedation Css50 = 336 ± 205 ng/mL ≈ analgesia Css50 (359 ng/mL); respiratory depression Ce inferred to be in the same 300-450 ng/mL range. No primary respiratory C50 study located.',
+        population: '15 cancer pain patients on IV methadone infusion',
         confidence: 'WEAK',
       },
     ],
-    summaryEn: 'Methadone has enormous interindividual variability (10-20× range). Analgesic Css50 ~290-359 ng/mL (Inturrisi 1987/1990). Respiratory Ce50 is not directly measured in any PubMed-abstract-level paper — inferred ~400 ng/mL from sedation Css50. Long elimination half-life (24-36 h) means accumulation; steady-state Ce is the operational concept. QTc prolongation is a separate non-Ce safety concern.',
-    summaryJa: 'メサドンは個人差が極めて大きい (10-20倍)。鎮痛 Css50 ~290-359 ng/mL (Inturrisi 1987/1990)。呼吸抑制 Ce50 は PubMed abstract レベルでは未測定 — 鎮静 Css50 から ~400 ng/mL と外挿。半減期が長く (24-36 h) 蓄積するため、定常状態の Ce が臨床的な操作概念。QT 延長は Ce と独立した別個のリスク。',
+    summaryEn: 'Methadone has enormous interindividual variability (10-20× range). Analgesic Css50 ~290-359 ng/mL (Inturrisi 1987/1990). Respiratory Ce50 ~400 ng/mL is not directly measured — inferred from sedation Css50 (336 ng/mL) plus MMT induction-phase deaths plasma mean (710 ng/mL, Eap 2002). Long elimination half-life (24-36 h) means accumulation; steady-state Ce is the operational concept. QTc prolongation is a separate non-Ce safety concern — ECG monitoring recommended for doses >500 mg/day.',
+    summaryJa: 'メサドンは個人差が極めて大きい (10-20倍)。鎮痛 Css50 ~290-359 ng/mL (Inturrisi 1987/1990)。呼吸抑制 Ce50 ~400 ng/mL は直接測定値ではなく、sedation Css50 (336 ng/mL) と MMT 導入期死亡例の plasma mean (710 ng/mL、Eap 2002) からの推定。半減期が長く (24-36 h) 蓄積するため、定常状態の Ce が臨床的な操作概念。QT 延長は Ce と独立した別個のリスク — Eap 2002 は >500 mg/day で ECG モニタを推奨。',
     caveats: [
-      { en: 'Respiratory Ce50 is INFERRED from sedation Css50 — no direct PubMed-abstract source', ja: '呼吸抑制 Ce50 は鎮静 Css50 からの外挿 — 直接的な PubMed abstract ソース無し' },
+      { en: 'Respiratory Ce50 is INFERRED from sedation Css50 + induction-phase deaths plasma data (Eap 2002) — no direct primary Ce50 study', ja: '呼吸抑制 Ce50 は sedation Css50 と導入期死亡例 plasma 値 (Eap 2002) からの推定 — 直接の primary Ce50 study は無し' },
       { en: 'Css50 range across individuals 40-1130 ng/mL — clinical dosing must be titrated, never use a single number', ja: '個人間の Css50 範囲 40-1130 ng/mL — 単一値で投与せず必ず titrate' },
       { en: 'Long terminal half-life (24-36 h) → repeated daily dosing accumulates over 5-7 days', ja: '消失半減期が長く (24-36 h) 反復投与で 5-7 日かけて蓄積' },
-      { en: 'QTc prolongation is a non-Ce safety concern — monitor ECG independently', ja: 'QT 延長は Ce と無関係の別個の安全課題 — 心電図モニタを独立に行う' },
+      { en: 'QTc prolongation: ECG monitoring recommended for doses >500 mg/day (Eap 2002); HERG IC50 = ~3000 ng/mL', ja: 'QT 延長: >500 mg/day で ECG モニタ推奨 (Eap 2002); HERG IC50 ~3000 ng/mL' },
     ],
-    provisional: true, // Resp Ce50 not directly measured
+    provisional: true, // Phase 5-K-3: WEAK → MODERATE upgraded (Eap 2002), but no primary Ce50 study — flag retained
   },
 
   Sufentanil: {
@@ -270,8 +292,8 @@ export const THERAPEUTIC_REFERENCES = {
         volumePage: '70:8-15',
         pmid: '2136976',
         url: 'https://pubmed.ncbi.nlm.nih.gov/2136976/',
-        keyFindings: 'Magnitude and duration of ventilatory depression were significantly less with sufentanil than fentanyl at equipotent doses. Numeric Ce50 in full text only — abstract describes the qualitative comparison. Estimated Ce ~0.4-0.7 ng/mL for clinically meaningful depression.',
-        population: '30 healthy young adult male volunteers, double-blind randomized crossover',
+        keyFindings: 'Sufentanil 0.4 mcg/kg IV bolus produced significant ventilatory depression with plasma 1.19 ± 0.20 ng/mL at 5 min; recovery to baseline by 30 min when plasma fell to ~0.14-0.50 ng/mL. No explicit Ce50 formula — derived range suggests respiratory C50 around 0.5 ng/mL. At equipotent doses, sufentanil produced less and shorter-lasting respiratory depression than fentanyl.',
+        population: '30 healthy young adult male volunteers, double-blind randomized crossover, doses 0.1/0.2/0.4 mcg/kg',
         confidence: 'MODERATE',
       },
     ],

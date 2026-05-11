@@ -38,16 +38,17 @@ export const THERAPEUTIC_RANGES = {
     label: 'Analgesia (20-80) / Resp C50: ~9-10 (Dahan 2004)'
   },
   'Hydromorphone': {
-    // Phase 5-K-1 update: analgesia anchored to Olofsen 2026 BJA (PMID:41656122) — limit-
-    // temperature modeling gave hydromorphone potency 4.4 ng/mL in 51 volunteers. Clinical
-    // postop PCA range 2-8 ng/mL covers analgesia onset through near-peak. Respiratory Ce50
-    // (1.0 ng/mL) is EXTRAPOLATED from Olofsen morphine:hydromorphone 10:1 potency ratio
-    // applied to Dahan 2004 morphine resp Ce50 ≈ 9 ng/mL — see therapeuticReferences.js
-    // (provisional flag set; abstract-level direct hydromorphone respiratory Ce50 is sparse).
+    // Phase 5-K-3 update: respiratoryRisk 1.0 → 3.4 ng/mL based on Olofsen 2026 BJA full
+    // text (PMID:41656122). The physiological respiratory model C50,Phys = 3.4 ng/mL for
+    // 50% depression of the ventilatory controller output in 51 healthy volunteers via
+    // NONMEM analysis (Table 2). This is direct primary data — previous 1.0 ng/mL was
+    // extrapolated from morphine:HM 10:1 ratio (5-K-1 era) and is now obsolete.
+    // Analgesia 2.0-8.0 ng/mL remains based on Olofsen analgesia potencies (limit
+    // temperature C1D = 4.4 ng/mL, T50 VAS C1D = 4.0 ng/mL).
     analgesiaMin: 2.0,
     analgesiaMax: 8.0,
-    respiratoryRisk: 1.0,
-    label: 'Analgesia (2.0-8.0) / Resp C50: ~1.0 (Olofsen 2026 ext.)'
+    respiratoryRisk: 3.4,
+    label: 'Analgesia (2.0-8.0) / Resp C50: 3.4 (Olofsen 2026)'
   },
   'Methadone': {
     // Phase 5-K-1 update: analgesia Css50 ~290-359 ng/mL from Inturrisi 1987/1990
