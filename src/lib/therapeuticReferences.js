@@ -1,4 +1,4 @@
-// Phase 5-K-1: Literature-backed therapeutic-range references for the 6 opioid drugs.
+// Phase 5-K-1 → 5-K-4: Literature-backed therapeutic-range references for the 6 opioid drugs.
 //
 // All PMIDs were verified by direct PubMed abstract fetch on 2026-05-10. Values
 // here are quoted/extracted from the abstracts; numbers in full-text-only papers
@@ -6,6 +6,12 @@
 //   SOLID    — abstract-extractable Ce/Css50 from primary RCT or PK/PD study
 //   MODERATE — extrapolated from a related study or review article
 //   WEAK     — no PubMed-abstract-discoverable Ce, textbook consensus only
+//
+// Phase 5-K-4 (2026-05-10): keyFindings and caveats enriched from full-text PDFs
+// for Dahan 2004 (γ split, postop target 30-90 nM), Sarton 2000 (sex-difference
+// PD origin), Lehmann 1991 (MEC distribution + cross-validation), Inturrisi 1987
+// (t½ke0 = 3.6 min, cross-tolerance impact), and Bae 2020 (Korean major OPEN
+// abdominal MEAC = upper reference). No appliedRange value changes in 5-K-4.
 //
 // `appliedRange` is the value actually used in THERAPEUTIC_RANGES (drugs.js). When
 // `provisional: true`, the app should show a "value-extrapolation" warning in the
@@ -22,8 +28,8 @@ export const THERAPEUTIC_REFERENCES = {
         volumePage: '125:976-985',
         pmid: '32861508',
         url: 'https://pubmed.ncbi.nlm.nih.gov/32861508/',
-        keyFindings: 'Postoperative analgesia in adults achieved at Ce 0.5-2.5 ng/mL.',
-        population: 'Postoperative adult population, opioid-naive',
+        keyFindings: 'In adults after major open abdominal surgery, median MEC (need for rescue) = 0.72 ng/mL (IQR 0.58-1.05) and median MEAC (pain relieved) = 0.99 ng/mL (IQR 0.76-1.28). Corresponding effect-site Ce: 1.09 ng/mL at MEC, 1.73 ng/mL at MEAC. Logistic regression Cp50 (50% probability of analgesia) = 0.63 ± 0.05 ng/mL, γ = 2.24. Authors\' explicit note: "MEAC value of fentanyl determined in this study may be the UPPER REFERENCE value for postoperative pain control" — laparoscopic surgery and ward-day-1-2 settings should have lower MEAC.',
+        population: '30 Korean patients post stomach / colorectal / hepatobiliary OPEN abdominal surgery (severe pain), opioid-naive, ASA 1-2',
         confidence: 'SOLID',
       },
     ],
@@ -46,6 +52,8 @@ export const THERAPEUTIC_REFERENCES = {
       { en: 'Wide interindividual variability (CV ~30-50%)', ja: '個人差が大きい (CV ~30-50%)' },
       { en: 'Opioid-tolerant patients require higher Ce for both analgesia and respiratory depression', ja: 'オピオイド耐性患者では鎮痛も呼吸抑制も Ce が上にシフト' },
       { en: 'Pediatric / neonate ranges differ — see Ginsberg / Anand model citations', ja: '小児・新生児では数値が異なる — Ginsberg / Anand モデルの citation 参照' },
+      { en: 'Bae 2020 MEAC (0.99 ng/mL) is an UPPER reference — sourced from Korean major OPEN abdominal surgery (severe acute pain). Laparoscopic procedures and postoperative day 1-2 ward analgesia should have lower MEAC than this.', ja: 'Bae 2020 MEAC (0.99 ng/mL) は upper reference — 出典は韓国の major open abdominal surgery (強い急性痛)。腹腔鏡や術後 1-2 日目病棟管理ではより低い MEAC が想定される。' },
+      { en: 'First-arrival-at-PACU plasma fentanyl in Bae 2020 averaged just 0.15 ng/mL — intraop dosing alone usually does not cover early PACU pain; titrate rescue doses promptly', ja: 'Bae 2020 で PACU 到着直後の plasma fentanyl 平均は 0.15 ng/mL — 術中投与だけでは PACU 初期痛をカバーしきれず、rescue を遅滞なく titrate' },
     ],
     provisional: false,
   },
@@ -109,8 +117,8 @@ export const THERAPEUTIC_REFERENCES = {
         volumePage: '101:1201-1209',
         pmid: '15505457',
         url: 'https://pubmed.ncbi.nlm.nih.gov/15505457/',
-        keyFindings: 'Integrated NONMEM analysis: potency parameter 32±1.4 nM (~9 ng/mL morphine free base) — analgesia and respiration share the same potency. Blood-effect-site equilibration t½ = 4.4±0.3 h.',
-        population: '8 healthy volunteers (4M/4F), morphine infusion, 24-h observation',
+        keyFindings: 'Integrated NONMEM analysis: potency parameter AC50 = C50 = 32±1.4 nM (≈9 ng/mL) — analgesia and respiration share the same potency. Steep analgesic dose-response (γ = 2.4±0.7) vs flat respiratory (γ = 1). Blood-effect-site t½ke0 = 4.4±0.3 h. Time-to-peak: analgesia 80-119 min, respiration 90-111 min. Clinical postop/cancer pain treatment targets 30-90 nM (9-25 ng/mL) — at these concentrations, healthy volunteers show 60% respiratory depression. M6G contribution to overall effect: 5-10%.',
+        population: '8 healthy volunteers (4M/4F), 0.2 mg/kg IV morphine, 24-h observation',
         confidence: 'SOLID',
       },
     ],
@@ -122,8 +130,19 @@ export const THERAPEUTIC_REFERENCES = {
         volumePage: '101:1201-1209',
         pmid: '15505457',
         url: 'https://pubmed.ncbi.nlm.nih.gov/15505457/',
-        keyFindings: 'Same potency parameter (32 nM ≈ 9 ng/mL) governs both analgesia and ventilatory depression — γ = 1 for hypercapnic/hypoxic breathing, γ = 2.4 for analgesia.',
+        keyFindings: 'Same potency parameter (32 nM ≈ 9 ng/mL) governs both analgesia and ventilatory depression — γ = 1 for hypercapnic/hypoxic breathing, γ = 2.4 for analgesia. Implication: mild-to-moderate respiratory depression occurs at Ce <10 nM, well before analgesic onset. Clinical worst-case scenario — severe respiratory depression remains possible despite inadequate pain relief.',
         population: '8 healthy volunteers',
+        confidence: 'SOLID',
+      },
+      {
+        authors: 'Sarton E et al.',
+        year: 2000,
+        journal: 'Anesthesiology',
+        volumePage: '93:1245-1254',
+        pmid: '11046213',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/11046213/',
+        keyFindings: 'Sex difference in morphine analgesic pharmacodynamics (no PK difference): AC50 for pain tolerance men 76.5±7.4 nM vs women 32.9±7.9 nM (women ~2.3× more potent). ke0 men 0.0073/min (t½ ~1.6 h) vs women 0.0024/min (t½ ~4.8 h) — women have 2-3× slower onset/offset. Plasma morphine, M6G, M3G concentrations identical between sexes. May explain higher postop opioid consumption in men.',
+        population: '20 healthy volunteers (10M/10F), 0.1 mg/kg bolus + 30 mcg/kg/h for 1 h',
         confidence: 'SOLID',
       },
       {
@@ -152,9 +171,10 @@ export const THERAPEUTIC_REFERENCES = {
     summaryEn: 'Morphine\'s analgesic and respiratory depressant potencies share roughly the same Ce (~9 ng/mL for 50% effect — directly confirmed by Olofsen 2026 C50,Phys = 8.9 ng/mL and Dahan 2004 32nM ≈ 9 ng/mL). The clinically targeted analgesic range (20-80 ng/mL) sits well above the respiratory C50 — which is exactly why morphine has a reputation for respiratory depression at therapeutic doses. The very slow keo (t½ 4.4–4.7 h) explains the delayed peak after IV bolus; wait before re-dosing.',
     summaryJa: 'モルヒネは鎮痛効果と呼吸抑制の Ce がほぼ同じ (~9 ng/mL で 50% 効果 — Olofsen 2026 C50,Phys = 8.9 ng/mL と Dahan 2004 の 32 nM 換算 ~9 ng/mL で直接確認済み)。臨床鎮痛域 20-80 ng/mL は呼吸抑制 C50 を遥かに超えるため、治療量で呼吸抑制が起きるのはこの薬理が原因。keo が極端に遅い (t½ 4.4-4.7 h) ため、IV bolus 後のピークが遅れる — 追加投与は十分待つ。',
     caveats: [
-      { en: 'M6G (morphine-6-glucuronide) contributes additional respiratory depression, especially in renal impairment', ja: 'M6G (morphine-6-glucuronide) が腎機能低下時に追加で呼吸抑制を起こす' },
+      { en: 'M6G (morphine-6-glucuronide) contributes additional respiratory depression, especially in renal impairment; Dahan 2004 attributed only 5-10% of acute effect to M6G in healthy volunteers', ja: 'M6G (morphine-6-glucuronide) が腎機能低下時に追加で呼吸抑制を起こす; Dahan 2004 では健常者の急性効果に占める M6G 寄与は 5-10% のみ' },
       { en: 'Analgesia γ ≈ 2.4 means dose-response is steep — small Ce changes give large analgesic shifts', ja: '鎮痛の γ ≈ 2.4 で用量反応が急峻 — わずかな Ce 変化で鎮痛効果が大きく動く' },
-      { en: 'Sex differences: Sarton 1998 showed women have lower morphine respiratory depression Ce', ja: '性差: Sarton 1998 で女性は morphine 呼吸抑制 Ce がより低い' },
+      { en: 'Sex differences (Sarton 2000): women have ~2× lower AC50 (more potent) for analgesia and ~2-3× slower ke0 (delayed onset/offset). Same direction confirmed for respiratory depression in Sarton 1998/Dahan 1998. PK identical between sexes — the difference is purely pharmacodynamic.', ja: '性差 (Sarton 2000): 女性は AC50 が約半分 (より potent)、ke0 が 2-3 倍遅い (onset/offset 遅延)。Sarton 1998 / Dahan 1998 で呼吸抑制も同方向に確認。PK は両性同一 — 純粋に PD 由来の差。' },
+      { en: 'Time-to-peak after IV bolus is delayed (80-119 min for analgesia; Dahan 2004) — wait before re-dosing to avoid stacking', ja: 'IV bolus 後のピーク到達は遅延 (鎮痛 80-119 分; Dahan 2004) — 追加投与は十分待ち、stacking を避ける' },
     ],
     provisional: false,
   },
@@ -229,8 +249,8 @@ export const THERAPEUTIC_REFERENCES = {
         volumePage: '41:392-401',
         pmid: '3829576',
         url: 'https://pubmed.ncbi.nlm.nih.gov/3829576/',
-        keyFindings: 'Steady-state plasma methadone for 50% maximum pain relief ranged 0.04-1.13 µg/mL (40-1130 ng/mL), mean 0.29 µg/mL (290 ng/mL).',
-        population: 'Cancer pain patients',
+        keyFindings: 'Steady-state plasma methadone for 50% maximum pain relief (Css50) ranged 0.04-1.13 µg/mL (40-1130 ng/mL), mean 0.29 ± 0.38 µg/mL (290 ng/mL) — ~30-fold individual variation. Hill slope γ = 2.02 (mean). Blood-effect-site t½ke0 = 3.6 min (harmonic mean, range 1.3-23.1 min) — much faster onset than morphine (4.4 h) due to high lipophilicity. 2 of 8 cancer-pain patients showed no analgesic response, attributed to cross-tolerance from prior opioid exposure. Patient with highest prior opioid exposure had the highest Css50 (1.13 µg/mL).',
+        population: '8 chronic-pain patients (5 cancer), single IV dose 10-30 mg methadone HCl, all with prior opioid experience',
         confidence: 'SOLID',
       },
     ],
@@ -265,6 +285,8 @@ export const THERAPEUTIC_REFERENCES = {
       { en: 'Css50 range across individuals 40-1130 ng/mL — clinical dosing must be titrated, never use a single number', ja: '個人間の Css50 範囲 40-1130 ng/mL — 単一値で投与せず必ず titrate' },
       { en: 'Long terminal half-life (24-36 h) → repeated daily dosing accumulates over 5-7 days', ja: '消失半減期が長く (24-36 h) 反復投与で 5-7 日かけて蓄積' },
       { en: 'QTc prolongation: ECG monitoring recommended for doses >500 mg/day (Eap 2002); HERG IC50 = ~3000 ng/mL', ja: 'QT 延長: >500 mg/day で ECG モニタ推奨 (Eap 2002); HERG IC50 ~3000 ng/mL' },
+      { en: 'Effect-site equilibration is fast (t½ke0 ≈ 3.6 min, Inturrisi 1987) due to high lipophilicity — IV bolus produces rapid analgesic onset, distinct from the long elimination half-life', ja: 'Effect-site 平衡が速い (t½ke0 ≈ 3.6 min、Inturrisi 1987) — 高親油性のため IV bolus 後の鎮痛 onset は速い (長い消失半減期とは別の話)' },
+      { en: 'Cross-tolerance from prior opioids raises required Ce: in Inturrisi 1987, the patient with most prior opioid exposure had a Css50 of 1130 ng/mL vs the cohort mean of 290 ng/mL', ja: '前治療オピオイドからの cross-tolerance で必要 Ce が上昇: Inturrisi 1987 では既往オピオイド最多の症例で Css50 が 1130 ng/mL (集団平均 290 の約4倍)' },
     ],
     provisional: true, // Phase 5-K-3: WEAK → MODERATE upgraded (Eap 2002), but no primary Ce50 study — flag retained
   },
@@ -279,8 +301,8 @@ export const THERAPEUTIC_REFERENCES = {
         volumePage: '35:221-226',
         pmid: '1674829',
         url: 'https://pubmed.ncbi.nlm.nih.gov/1674829/',
-        keyFindings: 'Minimum effective serum sufentanil concentration ranged <0.01-0.56 ng/mL (median 0.024 ng/mL). "To get into the therapeutic window for analgesia, a serum sufentanil concentration of more than 0.03 ng/ml seems to be necessary."',
-        population: '40 ASA I-III patients post major gynecological surgery, IV PCA',
+        keyFindings: 'Minimum effective serum sufentanil concentration ranged <0.01-0.56 ng/mL (median 0.024 ng/mL), log-normally distributed. Inter-subject CV 84.8%, intra-individual CV 76.0%. "To get into the therapeutic window for analgesia, a serum sufentanil concentration of more than 0.03 ng/ml seems to be necessary." Sufentanil 2.2-3.8× more potent than fentanyl when both effect intensity and duration are considered. Cross-validation: White 1987 reported respiratory depression onset at plasma 0.95 ng/mL; Hudson 1989 reported 0.6-1.9 ng/mL during general anesthesia; O\'Connor & Sear 1988 reported extubation at 0.03-0.37 ng/mL.',
+        population: '40 ASA I-III patients post major gynecological surgery, IV PCA, RIA detection limit 0.01 ng/mL',
         confidence: 'SOLID',
       },
     ],
@@ -303,6 +325,7 @@ export const THERAPEUTIC_REFERENCES = {
       { en: 'Respiratory Ce50 numeric value comes from full-text Bailey 1990 / textbook conventions, not abstract-extractable', ja: '呼吸抑制 Ce50 数値は full text Bailey 1990 / 教科書由来、abstract からは抽出不可' },
       { en: 'Surgical anesthesia Ce 1-3 ng/mL is from MAC-reduction studies (Glass and others) — not from Lehmann', ja: '外科麻酔 Ce 1-3 ng/mL は MAC 減量研究 (Glass 他) 由来 — Lehmann ではない' },
       { en: 'Very lipophilic — large Vd and slow context-sensitive offset', ja: '高親油性のため Vd が大きく、context-sensitive な消失が遅い' },
+      { en: 'Enormous interindividual variability in MEC (intersubject CV ~85%, Lehmann 1991) — single-number titration unreliable; individual MEC ranged <0.01 to 0.56 ng/mL across 40 patients', ja: 'MEC の個人差が極めて大きい (intersubject CV ~85%、Lehmann 1991) — 単一値での titrate は不確実; 40人中の個人 MEC は <0.01〜0.56 ng/mL に分布' },
     ],
     provisional: false,
   },
