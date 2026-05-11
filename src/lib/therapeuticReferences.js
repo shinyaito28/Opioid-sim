@@ -180,7 +180,7 @@ export const THERAPEUTIC_REFERENCES = {
   },
 
   Hydromorphone: {
-    appliedRange: { analgesiaMin: 2, analgesiaMax: 8, respiratoryRisk: 3.4 },
+    appliedRange: { analgesiaMin: 4, analgesiaMax: 8, respiratoryRisk: 3.4 },
     analgesiaCitations: [
       {
         authors: 'Olofsen E et al.',
@@ -218,9 +218,10 @@ export const THERAPEUTIC_REFERENCES = {
         confidence: 'SOLID',
       },
     ],
-    summaryEn: 'Hydromorphone is approximately 2.6× more potent than morphine for respiratory depression (Olofsen 2026 C50,Phys = 3.4 vs 8.9 ng/mL) and 10× more potent for analgesia (limit-temperature endpoint). Clinical PCA analgesic Ce 2-8 ng/mL overlaps with the respiratory C50 — therapeutic window is narrow, similar to morphine. Faster onset than morphine (t½ke0 2.2 h vs 4.7 h for ventilatory effect) means peak effects arrive sooner after bolus.',
-    summaryJa: 'ハイドロモルフォンはモルヒネに対し呼吸抑制で約 2.6 倍、鎮痛 (限界温度) で約 10 倍の力価 (Olofsen 2026 直接測定; C50,Phys 3.4 vs 8.9 ng/mL)。臨床 PCA 鎮痛 Ce 2-8 ng/mL は呼吸抑制 C50 と重なり、モルヒネ同様に治療幅が狭い。呼吸 effect への t½ke0 は 2.2 h (vs morphine 4.7 h) で onset がやや速く、bolus 後のピーク到達も早い。',
+    summaryEn: 'On Olofsen 2026 direct measurements in 51 healthy volunteers, hydromorphone\'s analgesia onset Ce (limit-temp C1D = 4.4, VAS T50 C1D = 4.0 ng/mL) sits ABOVE the respiratory C50,Phys (3.4 ng/mL). Clinically: meaningful respiratory depression starts BEFORE adequate analgesia is reached on average. This is the narrowest therapeutic margin among the 6 opioids on the chart. HM is ~2.6× more potent than morphine for respiratory depression and ~10× more potent for analgesia (limit-temperature endpoint). Faster ventilatory t½ke0 (2.2 h vs morphine 4.7 h) means peak effects arrive sooner after bolus.',
+    summaryJa: 'Olofsen 2026 (健常者 51 名直接測定) では、ハイドロモルフォンの鎮痛 onset Ce (限界温度 C1D = 4.4、VAS T50 C1D = 4.0 ng/mL) は呼吸抑制 C50,Phys (3.4 ng/mL) より **高い**。すなわち平均的に「十分な鎮痛が得られる前に臨床的な呼吸抑制が始まる」。これは本アプリ上 6 オピオイド中、最も狭い治療幅。呼吸抑制で morphine の約 2.6 倍、鎮痛 (限界温度) で約 10 倍の力価。呼吸 effect への t½ke0 は 2.2 h (vs morphine 4.7 h) で onset が比較的速く、bolus 後のピーク到達も早い。',
     caveats: [
+      { en: 'Analgesic onset Ce sits ~0.6 ng/mL ABOVE the respiratory C50 — HM should be titrated with the same caution as morphine despite its higher absolute potency. Resp depression often precedes analgesia at average potencies.', ja: '鎮痛 onset Ce が呼吸抑制 C50 より ~0.6 ng/mL 高い — 絶対力価が大きくても morphine 同等の慎重な titrate が必要。平均的力価では鎮痛より先に呼吸抑制が出る。' },
       { en: 'Respiratory Ce50 now directly measured (Olofsen 2026); previous extrapolation from morphine ratio is obsolete', ja: '呼吸抑制 Ce50 は直接測定値 (Olofsen 2026); 旧 extrapolation 値は廃止' },
       { en: 'Less metabolite-driven respiratory effect than morphine (no M6G analog)', ja: 'モルヒネと違い M6G に相当する活性代謝物による追加効果は無い' },
       { en: 'Faster onset than morphine but still much slower than fentanyl', ja: 'モルヒネより onset は速いが fentanyl より遥かに遅い' },

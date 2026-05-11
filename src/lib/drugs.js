@@ -38,17 +38,23 @@ export const THERAPEUTIC_RANGES = {
     label: 'Analgesia (20-80) / Resp C50: ~9-10 (Dahan 2004)'
   },
   'Hydromorphone': {
-    // Phase 5-K-3 update: respiratoryRisk 1.0 → 3.4 ng/mL based on Olofsen 2026 BJA full
-    // text (PMID:41656122). The physiological respiratory model C50,Phys = 3.4 ng/mL for
-    // 50% depression of the ventilatory controller output in 51 healthy volunteers via
-    // NONMEM analysis (Table 2). This is direct primary data — previous 1.0 ng/mL was
-    // extrapolated from morphine:HM 10:1 ratio (5-K-1 era) and is now obsolete.
-    // Analgesia 2.0-8.0 ng/mL remains based on Olofsen analgesia potencies (limit
-    // temperature C1D = 4.4 ng/mL, T50 VAS C1D = 4.0 ng/mL).
-    analgesiaMin: 2.0,
+    // Phase 5-K-5: analgesiaMin 2.0 → 4.0 ng/mL, aligned with Olofsen 2026 BJA
+    // (PMID:41656122) direct analgesic potency measurement in the SAME 51 healthy
+    // volunteer cohort that produced respC50,Phys = 3.4 ng/mL. Olofsen Table 2:
+    // limit-temperature C1D = 4.4 ng/mL (IQR 3.4-5.5), VAS T50 C1D = 4.0 ng/mL
+    // (IQR 3.1-6.0). The previous 2.0 came from Coda 1997 morphine:HM = 5:1 PCA
+    // ratio extrapolation, which is inconsistent with Olofsen's direct data.
+    // Net effect: analgesiaMin (4.0) now sits ABOVE respC50 (3.4), correctly
+    // reflecting Olofsen's finding that HM analgesic and respiratory potencies
+    // are in essentially the same Ce range — therapeutic window is extremely
+    // narrow (clinically meaningful respiratory depression starts before
+    // adequate analgesia is reached on average).
+    // Phase 5-K-3: respiratoryRisk 1.0 → 3.4 ng/mL from Olofsen C50,Phys (direct,
+    // 50% depression of ventilatory controller output via NONMEM).
+    analgesiaMin: 4.0,
     analgesiaMax: 8.0,
     respiratoryRisk: 3.4,
-    label: 'Analgesia (2.0-8.0) / Resp C50: 3.4 (Olofsen 2026)'
+    label: 'Analgesia (4.0-8.0) / Resp C50: 3.4 (Olofsen 2026)'
   },
   'Methadone': {
     // Phase 5-K-1 update: analgesia Css50 ~290-359 ng/mL from Inturrisi 1987/1990
