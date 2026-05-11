@@ -407,23 +407,32 @@ const App = () => {
   );
   const simData = simByDrug.get(drug) || [];
 
-  // Combined Opioid Burden Index = Σ (Ce_drug(t) / RespC50_drug). >1.0 ⇒ warn.
-  // Sum is only over activeDrugs (events present); empty when no events are scheduled.
+  // Phase 5-J-3.1: depression fraction via Hill γ=1 (competitive μ-opioid model).
+  // Previously: burden(t) = Σ Ce_d/RespC50_d — linear sum, no upper bound, hard
+  // to read clinically once it exceeds 1. New form folds the same normalized-Ce
+  // sum R through the Hill function R/(1+R), giving a 0-1 fractional respiratory
+  // depression that is directly interpretable:
+  //   single drug at Ce = RespC50 → depression = 0.5 (= 50%, by C50 definition)
+  //   single drug at Ce = 2·RespC50 → depression ≈ 0.67
+  //   multiple opioids → independent additive normalized-Ce in same Hill function
+  // Evidence base: Dahan 2004 (PMID:15505457) used γ ≈ 1 for hypercapnic/hypoxic
+  // respiration; the additive-R form is standard μ-opioid competitive binding.
   const burdenSeries = useMemo(() => {
     if (activeDrugs.size === 0) return [];
     const len = simDuration + 1;
     const result = [];
     for (let t = 0; t < len; t++) {
-      let burden = 0;
+      let R = 0;
       for (const d of activeDrugs) {
         const sim = simByDrug.get(d);
         const point = sim?.[t];
         if (!point) continue;
         const respRisk = THERAPEUTIC_RANGES[d]?.respiratoryRisk;
         if (!respRisk) continue;
-        burden += (point.ce || 0) / respRisk;
+        R += (point.ce || 0) / respRisk;
       }
-      result.push({ time: t, burden: parseFloat(burden.toFixed(3)) });
+      const depression = R / (1 + R);
+      result.push({ time: t, burden: parseFloat(depression.toFixed(3)) });
     }
     return result;
   }, [simByDrug, activeDrugs, simDuration]);
@@ -1514,15 +1523,19 @@ const App = () => {
                   allowDataOverflow={true}
                   stroke={chartColors.axisStroke}
                 />
-                {/* Right Y-axis dedicated to the Combined Opioid Burden (Σ Ce/RespC50). */}
+                {/* Right Y-axis: fractional respiratory depression R/(1+R), Hill γ=1.
+                    Phase 5-J-3.1 — domain shrunk from [0, 2.5] to [0, 1.0] and ticks
+                    displayed as % so the curve reads as "% resp depression". */}
                 {activeDrugs.size > 0 && (
                   <YAxis
                     yAxisId="burden"
                     orientation="right"
-                    domain={[0, 2.5]}
+                    domain={[0, 1.0]}
+                    ticks={[0, 0.25, 0.5, 0.75, 1.0]}
+                    tickFormatter={(v) => `${Math.round(v * 100)}%`}
                     stroke={chartColors.axisStroke}
-                    label={{ value: 'Burden', angle: 90, position: 'insideRight', style: { textAnchor: 'middle', fill: chartColors.axisStroke }, fontSize: 11 }}
-                    width={40}
+                    label={{ value: 'Resp Dep', angle: 90, position: 'insideRight', style: { textAnchor: 'middle', fill: chartColors.axisStroke }, fontSize: 11 }}
+                    width={48}
                   />
                 )}
                 {isClockMode && currentSimMinutes !== null && currentSimMinutes >= 0 && currentSimMinutes <= simDuration && (
@@ -1713,17 +1726,19 @@ const App = () => {
                   ];
                 })}
 
-                {/* COMBINED OPIOID BURDEN — Σ Ce/RespC50 across active drugs; threshold 1.0
-                    Phase 5-J-3: this is the **instantaneous** risk index, distinct from the
-                    AUC summary panel below the chart. User-toggleable via showBurdenCurve. */}
+                {/* OPIOID RESPIRATORY DEPRESSION FRACTION — R/(1+R) where R = Σ Ce/RespC50.
+                    Phase 5-J-3.1: instantaneous fractional resp depression (Hill γ=1).
+                    Threshold 0.5 = 50% depression (single drug at its respC50). User-
+                    toggleable via showBurdenCurve. Distinct from the cumulative AUC
+                    panel below the chart. */}
                 {activeDrugs.size > 0 && showBurdenCurve && (
                   <>
                     <ReferenceLine
                       yAxisId="burden"
-                      y={1.0}
+                      y={0.5}
                       stroke="#dc2626"
                       strokeDasharray="2 2"
-                      label={{ value: 'Burden=1.0', position: 'right', fill: '#dc2626', fontSize: 10 }}
+                      label={{ value: '50% Dep', position: 'right', fill: '#dc2626', fontSize: 10 }}
                     />
                     <Line
                       yAxisId="burden"
