@@ -2050,14 +2050,19 @@ const App = () => {
         {/* --- SUMMARY METRICS ---
             Phase 5-L-2: each card has an ⓘ button that toggles a help popover
             spanning the full grid row, explaining the definition + caveats of
-            that metric in plain language. */}
+            that metric in plain language.
+            Phase 5-L-3: when clock-mode is active, Peak/Onset cards show the
+            absolute wall-clock time *and* the elapsed minutes, e.g.
+            "@09:23 (+12 min)" — relative-only was confusing in clinical use. */}
         {summaryMetrics && simData.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <SummaryCard
               accent="pink"
               label={t('summaryPeakCe')}
               value={(summaryMetrics.peakCe.value / summaryMetrics.displayDivisor).toFixed(2)}
-              footer={`${summaryMetrics.displayUnit} ${t('summaryAt')} ${summaryMetrics.peakCe.time}${t('summaryMin')}`}
+              footer={isClockMode
+                ? `${summaryMetrics.displayUnit} ${t('summaryAt')} ${minutesToTime(summaryMetrics.peakCe.time, startTime)} (+${summaryMetrics.peakCe.time}${t('summaryMin')})`
+                : `${summaryMetrics.displayUnit} ${t('summaryAt')} ${summaryMetrics.peakCe.time}${t('summaryMin')}`}
               helpKey="peak"
               helpText={t('summaryPeakCeHelp')}
               openId={summaryHelpOpen}
@@ -2068,9 +2073,15 @@ const App = () => {
             <SummaryCard
               accent="emerald"
               label={summaryMetrics.isSedative ? 'BIS Onset' : t('summaryOnset')}
-              value={summaryMetrics.onsetTime !== null ? `${summaryMetrics.onsetTime}` : '—'}
+              value={summaryMetrics.onsetTime !== null
+                ? (isClockMode
+                    ? minutesToTime(summaryMetrics.onsetTime, startTime)
+                    : `${summaryMetrics.onsetTime}`)
+                : '—'}
               footer={summaryMetrics.onsetTime !== null
-                ? `${t('summaryMin')} (Ce ≥ ${summaryMetrics.onsetThreshold})`
+                ? (isClockMode
+                    ? `+${summaryMetrics.onsetTime}${t('summaryMin')} (Ce ≥ ${summaryMetrics.onsetThreshold})`
+                    : `${t('summaryMin')} (Ce ≥ ${summaryMetrics.onsetThreshold})`)
                 : t('summaryNotReached')}
               helpKey="onset"
               helpText={summaryMetrics.isSedative ? t('summaryBisOnsetHelp') : t('summaryOnsetHelp')}
