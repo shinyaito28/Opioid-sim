@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { FolderOpen, Save, Download, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { FolderOpen, Save, Download, Trash2, ChevronDown, ChevronUp, SaveAll } from 'lucide-react';
 
 // Compact saved-scenarios menu in the top bar.
 // Closed: "📁 Cases (3)" button.
 // Open: dropdown with "+ Save current case" then list of scenarios with load/delete.
-export default function ScenarioMenu({ savedScenarios, saveScenario, loadScenario, deleteScenario, t }) {
+// Phase 5-L-1: when a named scenario is currently loaded (currentScenarioId set),
+// an additional "Overwrite" button is shown so the user can update that entry in
+// place instead of always creating a new row. isModified flips the overwrite
+// button into an emphasised "Save changes" state.
+export default function ScenarioMenu({
+  savedScenarios, saveScenario, loadScenario, deleteScenario,
+  currentScenarioId, isModified,
+  t,
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -17,7 +25,15 @@ export default function ScenarioMenu({ savedScenarios, saveScenario, loadScenari
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  const onSave = () => { saveScenario(); /* keep open so user can confirm */ };
+  const onSave = () => {
+    // Optional custom name; cancel keeps the auto-name.
+    const name = window.prompt(t('scenarioNamePrompt'), '');
+    saveScenario(null, name && name.trim() ? name.trim() : null);
+  };
+  const onOverwrite = () => {
+    if (currentScenarioId == null) return;
+    saveScenario(currentScenarioId);
+  };
   const onLoad = (s) => { loadScenario(s); setOpen(false); };
 
   return (
@@ -39,6 +55,18 @@ export default function ScenarioMenu({ savedScenarios, saveScenario, loadScenari
 
       {open && (
         <div className="absolute top-full mt-1 right-0 glass shadow-xl border border-slate-300 dark:border-slate-600 rounded-lg z-50 w-80 max-h-[60vh] overflow-y-auto text-slate-800 dark:text-slate-100">
+          {currentScenarioId != null && (
+            <button
+              onClick={onOverwrite}
+              className={`w-full flex items-center gap-2 p-2.5 text-sm font-bold border-b border-slate-200 dark:border-slate-700 transition ${isModified
+                ? 'text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/40'
+                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/40'}`}
+              title={t('overwriteSaveTooltip')}
+            >
+              <SaveAll className="w-4 h-4" />
+              <span>{isModified ? t('overwriteSaveWithChanges') : t('overwriteSave')}</span>
+            </button>
+          )}
           <button
             onClick={onSave}
             className="w-full flex items-center gap-2 p-2.5 text-sm font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 border-b border-slate-200 dark:border-slate-700 transition"
@@ -54,9 +82,23 @@ export default function ScenarioMenu({ savedScenarios, saveScenario, loadScenari
           ) : (
             <div className="divide-y divide-slate-200 dark:divide-slate-700">
               {savedScenarios.map((s) => (
-                <div key={s.id} className="p-2 px-3 flex justify-between items-center text-sm hover:bg-slate-50 dark:hover:bg-slate-800 group">
+                <div
+                  key={s.id}
+                  className={`p-2 px-3 flex justify-between items-center text-sm group ${
+                    s.id === currentScenarioId
+                      ? 'bg-indigo-50 dark:bg-indigo-900/30 border-l-2 border-indigo-500'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                >
                   <div className="flex flex-col min-w-0 flex-1 mr-2">
-                    <span className="font-bold text-slate-700 dark:text-slate-200 truncate">{s.name}</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-200 truncate">
+                      {s.name}
+                      {s.id === currentScenarioId && (
+                        <span className="ml-1 text-[10px] font-normal text-indigo-600 dark:text-indigo-300">
+                          {isModified ? `· ${t('unsavedChanges')}` : `· ${t('currentScenario')}`}
+                        </span>
+                      )}
+                    </span>
                     <span className="text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500 truncate">
                       {s.data.events.length} events · {s.data.model}
                     </span>

@@ -267,6 +267,15 @@ const App = () => {
 
   const [savedTraces, setSavedTraces] = useState([]);
   const [savedScenarios, setSavedScenarios] = useState([]); // SAVE/RESTORE FEATURE
+  // Phase 5-L-1: track the currently-loaded named scenario so the user can overwrite-
+  // save instead of always creating a new entry. null = no named scenario loaded
+  // (the localStorage auto-save still preserves working state across refreshes).
+  const [currentScenarioId, setCurrentScenarioId] = useState(null);
+  // Phase 5-L-1: dirty-flag relative to the loaded scenario. localStorage useEffect
+  // sets lastSavedAt on every persisted change; isModified flips to true on any
+  // patient/drug/event mutation while a named scenario is loaded.
+  const [isModified, setIsModified] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState(null);
   // Per-drug last-used amounts/rates so the QuickEntry form pre-fills sensibly when a drug is reselected.
   const [lastDoseByDrug, setLastDoseByDrug] = useState({});
   const [showRanges, setShowRanges] = useState(true);
@@ -340,6 +349,9 @@ const App = () => {
   }, []);
 
   // --- PERSISTENCE: SAVE ---
+  // Phase 5-L-1: also record lastSavedAt so the TopBar auto-save indicator can show
+  // the user that their working state is persisted (it always was — Phase 1 — but
+  // there was no UI signal of that fact).
   useEffect(() => {
     const dataToSave = {
       schemaVersion: 2,
@@ -355,7 +367,18 @@ const App = () => {
       simSettings: { startTime }
     };
     localStorage.setItem('opioid_sim_data', JSON.stringify(dataToSave));
+    setLastSavedAt(Date.now());
   }, [patient, drug, modelByDrug, events, simDuration, savedTraces, savedScenarios, lastDoseByDrug, isClockMode, startTime]);
+
+  // Phase 5-L-1: dirty-flag tracking against the currently-loaded named scenario.
+  // Any patient/drug/event/model/duration change after a load marks the scenario as
+  // modified; saveScenario(currentScenarioId) and loadScenario both clear the flag.
+  useEffect(() => {
+    if (currentScenarioId != null) {
+      setIsModified(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient, drug, modelByDrug, events, simDuration]);
 
   const [editingId, setEditingId] = useState(null);
 
@@ -1128,22 +1151,34 @@ const App = () => {
   const getRandomColor = () => ['#10b981', '#8b5cf6', '#f59e0b', '#64748b', '#ef4444'][Math.floor(Math.random() * 5)];
 
   // --- SCENARIO SAVE/RESTORE HANDLERS ---
-  const saveScenario = () => {
-    const scenario = {
-      id: Date.now(),
-      name: `${drug} - ${patient.age}y ${patient.gender} (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
-      timestamp: Date.now(),
-      data: {
-        patient: { ...patient },
-        drug,
-        model,
-        events: [...events],
-        autoFillStats,
-        simDuration,
-        startTime: isClockMode ? startTime : null
-      }
+  // Phase 5-L-1: saveScenario now supports overwrite. If overwriteId is given, the
+  // matching entry is updated in place (timestamp + data); otherwise a new entry is
+  // pushed to the head. The newly-saved scenario becomes the "current" one so a
+  // subsequent overwrite-save acts on the same row.
+  const saveScenario = (overwriteId = null, customName = null) => {
+    const autoName = `${drug} - ${patient.age}y ${patient.gender} (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
+    const data = {
+      patient: { ...patient },
+      drug,
+      model,
+      events: [...events],
+      autoFillStats,
+      simDuration,
+      startTime: isClockMode ? startTime : null,
     };
+    if (overwriteId != null) {
+      setSavedScenarios(prev => prev.map(s => s.id === overwriteId
+        ? { ...s, name: customName ?? s.name, timestamp: Date.now(), data }
+        : s
+      ));
+      setIsModified(false);
+      return;
+    }
+    const id = Date.now();
+    const scenario = { id, name: customName ?? autoName, timestamp: id, data };
     setSavedScenarios(prev => [scenario, ...prev]);
+    setCurrentScenarioId(id);
+    setIsModified(false);
   };
 
   const loadScenario = (scenario) => {
@@ -1176,10 +1211,18 @@ const App = () => {
       setIsClockMode(true);
       setStartTime(d.startTime);
     }
+    // Phase 5-L-1: track that this scenario is now the "current" one for overwrite.
+    setCurrentScenarioId(scenario.id);
+    setIsModified(false);
   };
 
   const deleteScenario = (id) => {
     setSavedScenarios(prev => prev.filter(s => s.id !== id));
+    // Phase 5-L-1: clear "current" pointer if the deleted entry was the loaded one.
+    if (currentScenarioId === id) {
+      setCurrentScenarioId(null);
+      setIsModified(false);
+    }
   };
 
 
@@ -1306,6 +1349,9 @@ const App = () => {
         saveScenario={saveScenario}
         loadScenario={loadScenario}
         deleteScenario={deleteScenario}
+        currentScenarioId={currentScenarioId}
+        isModified={isModified}
+        lastSavedAt={lastSavedAt}
         isDark={isDark}
         setIsDark={setIsDark}
       />

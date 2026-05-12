@@ -11,8 +11,14 @@ export default function TopBar({
   showRanges, setShowRanges,
   patient, setPatient, autoFillStats, setAutoFillStats,
   savedScenarios, saveScenario, loadScenario, deleteScenario,
+  currentScenarioId, isModified, lastSavedAt,
   isDark, setIsDark,
 }) {
+  // Phase 5-L-1: format the auto-save timestamp into HH:MM for a small indicator
+  // that confirms the working state is persisted in localStorage.
+  const savedLabel = lastSavedAt
+    ? new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : null;
   return (
     <header
       className="bg-slate-800 text-white shadow-md sticky top-0 z-30"
@@ -42,8 +48,20 @@ export default function TopBar({
           saveScenario={saveScenario}
           loadScenario={loadScenario}
           deleteScenario={deleteScenario}
+          currentScenarioId={currentScenarioId}
+          isModified={isModified}
           t={t}
         />
+
+        {savedLabel && (
+          <div
+            className="hidden sm:flex items-center gap-1 text-[10px] text-emerald-300 bg-slate-700/50 px-2 py-1 rounded"
+            title={t('autoSavedTooltip')}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            {t('autoSavedAt', { time: savedLabel })}
+          </div>
+        )}
 
         <div className="flex bg-slate-700 rounded p-0.5 gap-0.5">
           <button
