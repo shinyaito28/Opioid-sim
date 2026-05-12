@@ -9,6 +9,7 @@ import SedationChart from './components/SedationChart';
 import ChartEventPopover from './components/ChartEventPopover';
 import TherapeuticReferenceModal from './components/TherapeuticReferenceModal';
 import SummaryCard from './components/SummaryCard';
+import ClinicalAlerts from './components/ClinicalAlerts';
 import {
   THERAPEUTIC_RANGES,
   DRUG_UNITS,
@@ -26,6 +27,7 @@ import {
 } from './lib/drugs';
 import { simulateConcentration, processEvents } from './lib/simulation';
 import { computeBurdenAUC } from './lib/burden';
+import { computeAlerts } from './lib/alerts';
 import { useDarkMode } from './hooks/useDarkMode';
 
 
@@ -483,6 +485,23 @@ const App = () => {
     }
     return { total, therapeutic, supra };
   }, [simByDrug, activeOpioids, therapeuticOverrides]);
+
+  // Phase 5-L-4: rule-based clinical alerts. Returns structured records that the
+  // ClinicalAlerts component renders as colour-coded cards under the summary.
+  const clinicalAlerts = useMemo(() => {
+    // Per-drug effective ranges = literature defaults + user overrides.
+    const ranges = {};
+    for (const d of activeOpioids) {
+      ranges[d] = { ...THERAPEUTIC_RANGES[d], ...(therapeuticOverrides[d] || {}) };
+    }
+    return computeAlerts({
+      simByDrug,
+      ranges,
+      events,
+      activeOpioids: [...activeOpioids],
+      simDuration,
+    });
+  }, [simByDrug, activeOpioids, therapeuticOverrides, events, simDuration]);
 
   const activeParams = useMemo(() => getModelRequirements(drug, model), [drug, model]);
 
@@ -2133,6 +2152,13 @@ const App = () => {
               </div>
             )}
           </div>
+        )}
+
+        {/* Phase 5-L-4: rule-based clinical alerts strip. Sits between summary
+            cards and the AUC panel so it competes for the same vertical real
+            estate as the numbers it's interpreting. */}
+        {activeOpioids.length > 0 && simData.length > 0 && (
+          <ClinicalAlerts alerts={clinicalAlerts} t={t} />
         )}
 
         {/* Phase 5-J-3: Opioid Burden (cumulative AUC) summary panel.
