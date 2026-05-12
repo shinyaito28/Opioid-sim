@@ -8,6 +8,7 @@ import QuickEntry from './components/QuickEntry';
 import SedationChart from './components/SedationChart';
 import ChartEventPopover from './components/ChartEventPopover';
 import TherapeuticReferenceModal from './components/TherapeuticReferenceModal';
+import SummaryCard from './components/SummaryCard';
 import {
   THERAPEUTIC_RANGES,
   DRUG_UNITS,
@@ -294,6 +295,9 @@ const App = () => {
   // and burden-info expander (definition explainer). Curve defaults visible.
   const [showBurdenCurve, setShowBurdenCurve] = useState(true);
   const [showBurdenInfo, setShowBurdenInfo] = useState(false);
+  // Phase 5-L-2: which summary card has its help popover open. null = none.
+  // Single-selection so opening one closes the others.
+  const [summaryHelpOpen, setSummaryHelpOpen] = useState(null); // 'peak' | 'onset' | 'resp' | 'recovery' | null
   // Phase 5-J-4: X-axis lower bound (display only; data isn't trimmed). Default 0.
   // Combined with simDuration this gives the full chart-window. Negative values are
   // sometimes useful with timeZeroMinute for showing pre-event minutes.
@@ -2043,62 +2047,80 @@ const App = () => {
           }
         </div >
 
-        {/* --- SUMMARY METRICS --- */}
+        {/* --- SUMMARY METRICS ---
+            Phase 5-L-2: each card has an ⓘ button that toggles a help popover
+            spanning the full grid row, explaining the definition + caveats of
+            that metric in plain language. */}
         {summaryMetrics && simData.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <div className="bg-white dark:bg-slate-900 border border-pink-200 dark:border-pink-900/40 rounded-lg p-2.5 shadow-sm">
-              <div className="text-[10px] uppercase font-bold text-pink-600 tracking-wide">{t('summaryPeakCe')}</div>
-              <div className="text-xl font-bold text-pink-700 font-mono leading-tight">
-                {(summaryMetrics.peakCe.value / summaryMetrics.displayDivisor).toFixed(2)}
-              </div>
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                {summaryMetrics.displayUnit} {t('summaryAt')} {summaryMetrics.peakCe.time}{t('summaryMin')}
-              </div>
-            </div>
+            <SummaryCard
+              accent="pink"
+              label={t('summaryPeakCe')}
+              value={(summaryMetrics.peakCe.value / summaryMetrics.displayDivisor).toFixed(2)}
+              footer={`${summaryMetrics.displayUnit} ${t('summaryAt')} ${summaryMetrics.peakCe.time}${t('summaryMin')}`}
+              helpKey="peak"
+              helpText={t('summaryPeakCeHelp')}
+              openId={summaryHelpOpen}
+              setOpenId={setSummaryHelpOpen}
+              t={t}
+            />
 
-            <div className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900/40 rounded-lg p-2.5 shadow-sm">
-              <div className="text-[10px] uppercase font-bold text-emerald-600 tracking-wide">
-                {summaryMetrics.isSedative ? 'BIS Onset' : t('summaryOnset')}
-              </div>
-              <div className="text-xl font-bold text-emerald-700 font-mono leading-tight">
-                {summaryMetrics.onsetTime !== null ? `${summaryMetrics.onsetTime}` : '—'}
-              </div>
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                {summaryMetrics.onsetTime !== null
-                  ? `${t('summaryMin')} (Ce ≥ ${summaryMetrics.onsetThreshold})`
-                  : t('summaryNotReached')}
-              </div>
-            </div>
+            <SummaryCard
+              accent="emerald"
+              label={summaryMetrics.isSedative ? 'BIS Onset' : t('summaryOnset')}
+              value={summaryMetrics.onsetTime !== null ? `${summaryMetrics.onsetTime}` : '—'}
+              footer={summaryMetrics.onsetTime !== null
+                ? `${t('summaryMin')} (Ce ≥ ${summaryMetrics.onsetThreshold})`
+                : t('summaryNotReached')}
+              helpKey="onset"
+              helpText={summaryMetrics.isSedative ? t('summaryBisOnsetHelp') : t('summaryOnsetHelp')}
+              openId={summaryHelpOpen}
+              setOpenId={setSummaryHelpOpen}
+              t={t}
+            />
 
-            <div className="bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900/40 rounded-lg p-2.5 shadow-sm">
-              <div className="text-[10px] uppercase font-bold text-red-600 tracking-wide">
-                {summaryMetrics.isSedative ? 'Deep sedation' : t('summaryRespRisk')}
-              </div>
-              <div className="text-xl font-bold text-red-700 font-mono leading-tight">
-                {summaryMetrics.respRiskMin}
-              </div>
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                {summaryMetrics.respRiskThreshold != null
-                  ? `${t('summaryMin')} (Ce ≥ ${summaryMetrics.respRiskThreshold})`
-                  : '—'}
-              </div>
-            </div>
+            <SummaryCard
+              accent="red"
+              label={summaryMetrics.isSedative ? 'Deep sedation' : t('summaryRespRisk')}
+              value={summaryMetrics.respRiskMin}
+              footer={summaryMetrics.respRiskThreshold != null
+                ? `${t('summaryMin')} (Ce ≥ ${summaryMetrics.respRiskThreshold})`
+                : '—'}
+              helpKey="resp"
+              helpText={summaryMetrics.isSedative ? t('summaryDeepSedationHelp') : t('summaryRespRiskHelp')}
+              openId={summaryHelpOpen}
+              setOpenId={setSummaryHelpOpen}
+              t={t}
+            />
 
-            <div className="bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-900/40 rounded-lg p-2.5 shadow-sm">
-              <div className="text-[10px] uppercase font-bold text-purple-600 tracking-wide">
-                {summaryMetrics.recoveryTime !== null ? t('summaryRecovery') : t('summaryTotalDose')}
+            <SummaryCard
+              accent="purple"
+              label={summaryMetrics.recoveryTime !== null ? t('summaryRecovery') : t('summaryTotalDose')}
+              value={summaryMetrics.recoveryTime !== null
+                ? summaryMetrics.recoveryTime
+                : summaryMetrics.totalDose.toFixed(summaryMetrics.totalDose < 1 ? 2 : 1)}
+              footer={summaryMetrics.recoveryTime !== null
+                ? `${t('summaryMin')} after stop`
+                : summaryMetrics.drugUnit}
+              helpKey="recovery"
+              helpText={summaryMetrics.recoveryTime !== null ? t('summaryRecoveryHelp') : t('summaryTotalDoseHelp')}
+              openId={summaryHelpOpen}
+              setOpenId={setSummaryHelpOpen}
+              t={t}
+            />
+
+            {summaryHelpOpen && (
+              <div className="col-span-2 md:col-span-4 bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-xs text-slate-700 dark:text-slate-200 leading-relaxed">
+                {(() => {
+                  // Map openId back to the right help text for display in the row-spanning panel.
+                  if (summaryHelpOpen === 'peak') return t('summaryPeakCeHelp');
+                  if (summaryHelpOpen === 'onset') return summaryMetrics.isSedative ? t('summaryBisOnsetHelp') : t('summaryOnsetHelp');
+                  if (summaryHelpOpen === 'resp') return summaryMetrics.isSedative ? t('summaryDeepSedationHelp') : t('summaryRespRiskHelp');
+                  if (summaryHelpOpen === 'recovery') return summaryMetrics.recoveryTime !== null ? t('summaryRecoveryHelp') : t('summaryTotalDoseHelp');
+                  return null;
+                })()}
               </div>
-              <div className="text-xl font-bold text-purple-700 font-mono leading-tight">
-                {summaryMetrics.recoveryTime !== null
-                  ? summaryMetrics.recoveryTime
-                  : summaryMetrics.totalDose.toFixed(summaryMetrics.totalDose < 1 ? 2 : 1)}
-              </div>
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                {summaryMetrics.recoveryTime !== null
-                  ? `${t('summaryMin')} after stop`
-                  : summaryMetrics.drugUnit}
-              </div>
-            </div>
+            )}
           </div>
         )}
 
