@@ -797,6 +797,32 @@ const App = () => {
     setEditingId(null);
   };
 
+  // Phase 5-M-2: when a new infusion of the same drug is scheduled, the clinical
+  // mental model is "I'm changing the rate", not "I'm running two parallel
+  // infusions". So any same-drug infusion that's still active at the new start
+  // time is truncated to end exactly at the new event's start.
+  //
+  // This only touches same-drug overlap. Concurrent infusions of *different*
+  // drugs remain independently summed by the simulation engine (Phase 5-C
+  // bugfix is preserved).
+  const truncateOverlappingInfusions = (eventsList, drugArg, newStartTime) => {
+    return eventsList
+      .map((e) => {
+        if (e.drug !== drugArg || e.type !== 'infusion') return e;
+        if (e.time >= newStartTime) return e; // future / same-time entries left to the caller
+        const oldEnd = e.isInfinite ? Infinity : e.time + e.duration;
+        if (oldEnd <= newStartTime) return e; // already finished naturally
+        return {
+          ...e,
+          duration: newStartTime - e.time,
+          isInfinite: false,
+        };
+      })
+      // Drop zero/negative-duration leftovers defensively (shouldn't happen,
+      // but a malformed override is better deleted than rendered).
+      .filter((e) => !(e.drug === drugArg && e.type === 'infusion' && e.duration <= 0));
+  };
+
   const addInfusion = () => {
     let newStartTime = parseFloat(infusionStartTime);
     let currentEvents = [...events];
@@ -822,6 +848,9 @@ const App = () => {
     }
 
     const standardRate = convertToStandardUnit(parseFloat(infusionRate), infusionUnit, patient.weight, drug);
+
+    // Phase 5-M-2: truncate any same-drug infusion overlapping the new start.
+    currentEvents = truncateOverlappingInfusions(currentEvents, drug, newStartTime);
 
     setEvents([...currentEvents, {
       id: Date.now(),
@@ -882,6 +911,8 @@ const App = () => {
     }
 
     const standardRate = convertToStandardUnit(rateVal, unitArg, patient.weight, drugArg);
+    // Phase 5-M-2: truncate any same-drug infusion overlapping the new start.
+    currentEvents = truncateOverlappingInfusions(currentEvents, drugArg, newStartTime);
     setEvents([
       ...currentEvents,
       {
