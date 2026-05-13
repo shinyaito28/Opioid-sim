@@ -5,7 +5,6 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { Syringe, Clock, Settings, User, Activity, Plus, Trash2, Save, X, Eye, EyeOff, ZoomIn, Baby, Edit2, AlertCircle, Wand2, Info, FileText, Layers, FolderOpen, Download, MousePointerClick, RotateCcw } from 'lucide-react';
 import TopBar from './components/TopBar';
 import QuickEntry from './components/QuickEntry';
-import SedationChart from './components/SedationChart';
 import ChartEventPopover from './components/ChartEventPopover';
 import TherapeuticReferenceModal from './components/TherapeuticReferenceModal';
 import SummaryCard from './components/SummaryCard';
@@ -300,6 +299,13 @@ const App = () => {
   // Phase 5-L-2: which summary card has its help popover open. null = none.
   // Single-selection so opening one closes the others.
   const [summaryHelpOpen, setSummaryHelpOpen] = useState(null); // 'peak' | 'onset' | 'resp' | 'recovery' | null
+
+  // Phase 5-M: chart class — which drug family the main chart is rendering. Auto-
+  // estimated from activeOpioids/activeSedatives unless the user has manually
+  // toggled, in which case the override sticks until they manually toggle back.
+  // 'opioid' (default) | 'sedative'.
+  const [chartClass, setChartClass] = useState('opioid');
+  const chartClassManualRef = useRef(false);
   // Phase 5-J-4: X-axis lower bound (display only; data isn't trimmed). Default 0.
   // Combined with simDuration this gives the full chart-window. Negative values are
   // sometimes useful with timeZeroMinute for showing pre-event minutes.
@@ -396,8 +402,8 @@ const App = () => {
   );
 
   // Phase 5-G-2-a: split activeDrugs by class.
-  // activeOpioids → main chart Cp/Ce lines + Burden Index.
-  // activeSedatives → SedationChart rows below; section is omitted entirely when empty.
+  // Phase 5-M: both classes now render on the same main chart, controlled by
+  // chartClass below. SedationChart mini-charts removed.
   const activeOpioids = useMemo(
     () => [...activeDrugs].filter((d) => DRUG_CLASS[d] !== 'sedative'),
     [activeDrugs]
@@ -406,6 +412,44 @@ const App = () => {
     () => [...activeDrugs].filter((d) => DRUG_CLASS[d] === 'sedative'),
     [activeDrugs]
   );
+
+  // Phase 5-M: auto-estimate chartClass from active drug classes. Rules:
+  //   only opioids  active  → chartClass = 'opioid'
+  //   only sedatives active → chartClass = 'sedative'
+  //   both active           → keep current chartClass (don't yank the view)
+  //   no drugs active       → keep current (no need to switch on empty state)
+  // The manualRef gate prevents auto-estimate from clobbering a deliberate
+  // user toggle in the mixed-drug case.
+  useEffect(() => {
+    if (chartClassManualRef.current) return;
+    if (activeOpioids.length > 0 && activeSedatives.length === 0) {
+      setChartClass('opioid');
+    } else if (activeSedatives.length > 0 && activeOpioids.length === 0) {
+      setChartClass('sedative');
+    }
+  }, [activeOpioids.length, activeSedatives.length]);
+
+  // Toggle handler that records manual intent so subsequent auto-estimates
+  // don't overwrite the user's choice.
+  const handleChartClassToggle = (newClass) => {
+    chartClassManualRef.current = true;
+    setChartClass(newClass);
+  };
+
+  // Phase 5-M: which drugs to actually plot — depends on chartClass.
+  const plotDrugs = chartClass === 'sedative' ? activeSedatives : activeOpioids;
+
+  // Phase 5-M: single "primary drug" that drives axes, reference areas, summary
+  // ranges. Prefer the user's current drug select if it belongs to the active
+  // chartClass; otherwise fall back to the first active drug of that class.
+  const primaryDrugForChart = useMemo(() => {
+    if (chartClass === 'sedative') {
+      if (DRUG_CLASS[drug] === 'sedative') return drug;
+      return activeSedatives[0] ?? drug;
+    }
+    if (DRUG_CLASS[drug] !== 'sedative') return drug;
+    return activeOpioids[0] ?? drug;
+  }, [chartClass, drug, activeOpioids, activeSedatives]);
 
   // model & setModel are derived shims so existing detail-form code (which mutates a single
   // string) continues to operate on modelByDrug[drug] under the hood.
@@ -699,7 +743,10 @@ const App = () => {
       }
     });
 
-    const range = THERAPEUTIC_RANGES[drug];
+    // Phase 5-M: range now follows the chartClass's primary drug so that switching
+    // mode flips the therapeutic anchor (analgesiaMin/Max ↔ bisTarget/sedationBands)
+    // without the user touching the drug select.
+    const range = THERAPEUTIC_RANGES[primaryDrugForChart];
     let calculatedYMaxLocal;
     if (yAxisMode === 'custom') {
       calculatedYMaxLocal = yAxisMax;
@@ -716,7 +763,7 @@ const App = () => {
       calculatedYMaxLocal = dataPeak <= 0 ? 5 : Math.ceil(dataPeak * 1.2);
     }
     return { calculatedYMax: calculatedYMaxLocal, dataPeak, peakTime };
-  }, [yAxisMode, yAxisMax, drug, simByDrug, savedTraces]);
+  }, [yAxisMode, yAxisMax, primaryDrugForChart, simByDrug, savedTraces]);
 
   const calculatedYMax = yAxisInfo.calculatedYMax;
 
@@ -1253,12 +1300,24 @@ const App = () => {
   // Phase 5-J-4: literature-default range, possibly overridden per-drug. The
   // overrides only affect the displayed band + AUC band-clipping; respiratoryRisk
   // is literature-only by design.
+  // Phase 5-M: derive the chart's reference range from the primary drug, not
+  // necessarily the drug being edited. This makes the reference areas track the
+  // chartClass mode (opioid → analgesia band; sedative → bisTarget / sedationBands).
   const currentRange = useMemo(() => {
-    const def = THERAPEUTIC_RANGES[drug];
-    const ov = therapeuticOverrides[drug];
+    const def = THERAPEUTIC_RANGES[primaryDrugForChart];
+    const ov = therapeuticOverrides[primaryDrugForChart];
     if (!ov) return def;
     return { ...def, ...ov };
-  }, [drug, therapeuticOverrides]);
+  }, [primaryDrugForChart, therapeuticOverrides]);
+
+  // Phase 5-M: display unit + divisor for the chart's Y axis. Opioid mode is
+  // always ng/mL / 1; sedative mode follows the primary drug's DRUG_DISPLAY
+  // (Propofol/Remimazolam use mcg/mL with divisor 1000; Ketamine/Dex stay ng/mL).
+  const chartDisplay = useMemo(() => {
+    const dd = DRUG_DISPLAY[primaryDrugForChart] || { unit: 'ng/mL', divisor: 1 };
+    if (chartClass === 'sedative') return { unit: dd.unit, divisor: dd.divisor || 1 };
+    return { unit: 'ng/mL', divisor: 1 };
+  }, [primaryDrugForChart, chartClass]);
 
   const handleScaleChange = (newMax) => {
     setMaxTimeScale(newMax);
@@ -1418,6 +1477,30 @@ const App = () => {
                 so users can pick between Full (data-peak fit), Therapeutic (band-priority
                 default), or Custom (slider-driven). Slider stays visible but disabled outside
                 Custom so the relationship between control and effect is obvious. */}
+            {/* Phase 5-M: chartClass toggle — opioid / sedative. Auto-estimated
+                from active drugs; clicking either button records a manual override
+                that sticks until the user toggles again. */}
+            <div className="flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded p-0.5" title={t('chartClassTooltip')}>
+              <button
+                type="button"
+                onClick={() => handleChartClassToggle('opioid')}
+                className={`px-2 py-0.5 text-[11px] rounded transition ${chartClass === 'opioid'
+                  ? 'bg-blue-500 text-white font-bold'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+              >
+                {t('chartClassOpioid')}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleChartClassToggle('sedative')}
+                className={`px-2 py-0.5 text-[11px] rounded transition ${chartClass === 'sedative'
+                  ? 'bg-teal-500 text-white font-bold'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+              >
+                {t('chartClassSedative')}
+              </button>
+            </div>
+
             <div className="flex items-center gap-1.5">
               <ZoomIn className="w-3 h-3 text-slate-500 dark:text-slate-400 dark:text-slate-500" />
               <select
@@ -1440,8 +1523,13 @@ const App = () => {
                 }}
                 className={`w-24 md:w-32 accent-pink-500 ${yAxisMode === 'custom' ? 'opacity-100' : 'opacity-50'}`}
               />
-              <span className="text-[11px] font-mono w-20 text-right text-slate-600 dark:text-slate-300 tabular-nums">
-                {yAxisMode === 'custom' ? `${yAxisMax} ng/mL` : `${calculatedYMax.toFixed?.(1) ?? calculatedYMax} ng/mL`}
+              <span className="text-[11px] font-mono w-24 text-right text-slate-600 dark:text-slate-300 tabular-nums">
+                {(() => {
+                  // Phase 5-M: show Y-max in the chartClass's display unit.
+                  const raw = yAxisMode === 'custom' ? yAxisMax : calculatedYMax;
+                  const shown = chartDisplay.divisor === 1 ? raw : raw / chartDisplay.divisor;
+                  return `${shown < 10 ? shown.toFixed(2) : shown.toFixed(1)} ${chartDisplay.unit}`;
+                })()}
               </span>
             </div>
 
@@ -1587,15 +1675,18 @@ const App = () => {
                 />
                 <YAxis
                   yAxisId="left"
-                  label={{ value: t('concLabel'), angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: chartColors.axisStroke } }}
+                  label={{ value: `Conc (${chartDisplay.unit})`, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: chartColors.axisStroke } }}
                   domain={[0, calculatedYMax]}
                   allowDataOverflow={true}
+                  tickFormatter={(v) => chartDisplay.divisor === 1 ? v : (v / chartDisplay.divisor).toFixed(v / chartDisplay.divisor < 1 ? 2 : 1)}
                   stroke={chartColors.axisStroke}
                 />
                 {/* Right Y-axis: fractional respiratory depression R/(1+R), Hill γ=1.
                     Phase 5-J-3.1 — domain shrunk from [0, 2.5] to [0, 1.0] and ticks
-                    displayed as % so the curve reads as "% resp depression". */}
-                {activeDrugs.size > 0 && (
+                    displayed as % so the curve reads as "% resp depression".
+                    Phase 5-M: hidden in sedative mode (Burden Index is opioid-only;
+                    Bouillon synergy will provide the sedative-included version later). */}
+                {activeDrugs.size > 0 && chartClass === 'opioid' && (
                   <YAxis
                     yAxisId="burden"
                     orientation="right"
@@ -1624,8 +1715,13 @@ const App = () => {
                 />
                 <Legend verticalAlign="top" height={36} />
 
-                {/* Therapeutic Windows — shown for the current editor drug as a reference frame. */}
-                {showRanges && currentRange && (
+                {/* Therapeutic Windows — overlay set depends on chartClass.
+                    Phase 5-M: opioid mode keeps the existing analgesia + resp-risk
+                    overlay. Sedative mode renders the drug-specific bisTarget band
+                    (Propofol / Remimazolam) or sedationBands set (Dex) or
+                    experimentalReferenceLine (Ketamine), porting the logic that
+                    used to live in SedationChart.jsx. */}
+                {showRanges && currentRange && chartClass === 'opioid' && currentRange.analgesiaMin != null && (
                   <>
                     <ReferenceArea
                       yAxisId="left"
@@ -1648,22 +1744,71 @@ const App = () => {
                       strokeDasharray="3 3"
                       label={{ value: t('analgesiaMin'), position: 'insideBottomRight', fill: '#166534', fontSize: 10 }}
                     />
+                    {currentRange.respiratoryRisk != null && (
+                      <>
+                        <ReferenceArea
+                          yAxisId="left"
+                          y1={currentRange.respiratoryRisk}
+                          y2={9999}
+                          fill="#ef4444"
+                          fillOpacity={0.05}
+                        />
+                        <ReferenceLine
+                          yAxisId="left"
+                          y={currentRange.respiratoryRisk}
+                          stroke="#ef4444"
+                          strokeWidth={1.5}
+                          strokeDasharray="4 2"
+                          label={{ value: `${t('respRisk')} ${currentRange.respiratoryRisk}`, position: 'insideTopLeft', fill: '#dc2626', fontSize: 11, fontWeight: 'bold' }}
+                        />
+                      </>
+                    )}
+                  </>
+                )}
+                {showRanges && currentRange && chartClass === 'sedative' && currentRange.bisTarget && (
+                  <>
                     <ReferenceArea
                       yAxisId="left"
-                      y1={currentRange.respiratoryRisk}
-                      y2={9999}
-                      fill="#ef4444"
-                      fillOpacity={0.05}
+                      y1={currentRange.bisTarget.min}
+                      y2={currentRange.bisTarget.max}
+                      fill="#3b82f6"
+                      fillOpacity={0.15}
                     />
                     <ReferenceLine
                       yAxisId="left"
-                      y={currentRange.respiratoryRisk}
-                      stroke="#ef4444"
-                      strokeWidth={1.5}
-                      strokeDasharray="4 2"
-                      label={{ value: `${t('respRisk')} ${currentRange.respiratoryRisk}`, position: 'insideTopLeft', fill: '#dc2626', fontSize: 11, fontWeight: 'bold' }}
+                      y={currentRange.bisTarget.max}
+                      stroke="#2563eb"
+                      strokeDasharray="3 3"
+                      label={{ value: `BIS target (${(currentRange.bisTarget.max / chartDisplay.divisor).toFixed(2)} ${chartDisplay.unit})`, position: 'insideTopRight', fill: '#1d4ed8', fontSize: 10 }}
+                    />
+                    <ReferenceLine
+                      yAxisId="left"
+                      y={currentRange.bisTarget.min}
+                      stroke="#2563eb"
+                      strokeDasharray="3 3"
+                      label={{ value: `BIS lower (${(currentRange.bisTarget.min / chartDisplay.divisor).toFixed(2)})`, position: 'insideBottomRight', fill: '#1d4ed8', fontSize: 10 }}
                     />
                   </>
+                )}
+                {showRanges && currentRange && chartClass === 'sedative' && Array.isArray(currentRange.sedationBands) && currentRange.sedationBands.map((band, idx) => (
+                  <ReferenceArea
+                    key={`sedband-${idx}`}
+                    yAxisId="left"
+                    y1={band.min}
+                    y2={band.max}
+                    fill={band.color || '#6366f1'}
+                    fillOpacity={0.12}
+                    label={{ value: band.label, position: 'insideRight', fill: '#4338ca', fontSize: 10 }}
+                  />
+                ))}
+                {showRanges && currentRange && chartClass === 'sedative' && currentRange.experimentalReferenceLine != null && (
+                  <ReferenceLine
+                    yAxisId="left"
+                    y={currentRange.experimentalReferenceLine}
+                    stroke="#7c3aed"
+                    strokeDasharray="4 2"
+                    label={{ value: `Heat-pain ref (${currentRange.experimentalReferenceLine} ng/mL)`, position: 'insideTopLeft', fill: '#6d28d9', fontSize: 10 }}
+                  />
                 )}
 
                 {/* DOSING EVENT MARKERS — coloured by the event's drug */}
@@ -1751,19 +1896,22 @@ const App = () => {
                   />
                 ))}
 
-                {/* CURRENT SIMULATION — one Cp + Ce pair per active opioid, drug-coloured.
-                    Sedatives are rendered separately in <SedationChart /> rows below the main
-                    chart (Phase 5-G-2-a) so this loop only iterates opioid drugs. */}
-                {activeOpioids.flatMap((d) => {
+                {/* CURRENT SIMULATION — one Cp + Ce pair per active drug, drug-coloured.
+                    Phase 5-M: this loop iterates plotDrugs, which is activeOpioids in
+                    opioid mode and activeSedatives in sedative mode. The chart Y axis
+                    is in ng/mL internally; each line divides by its drug's display
+                    divisor when chartClass='sedative' (so mcg/mL drugs display in mcg). */}
+                {plotDrugs.flatMap((d) => {
                   const sim = simByDrug.get(d);
                   if (!sim || sim.length === 0) return [];
                   const colors = DRUG_COLORS[d] || { ce: '#ec4899', cp: '#3b82f6' };
                   const shortName = DRUG_SHORT_NAMES[d] || d;
-                  const displayUnit = DRUG_DISPLAY[d]?.unit || 'ng/mL';
-                  const divisor = DRUG_DISPLAY[d]?.divisor || 1;
-                  const displaySim = divisor === 1
-                    ? sim
-                    : sim.map((p) => ({ time: p.time, cp: p.cp / divisor, ce: p.ce / divisor }));
+                  // Phase 5-M: chart Y axis is ng/mL internally for all drugs; the
+                  // tickFormatter handles divisor conversion to mcg/mL when needed.
+                  // Don't pre-divide here — that would put the line at the wrong
+                  // y-coordinate relative to ReferenceAreas (which are in ng/mL too).
+                  const displayUnit = chartDisplay.unit;
+                  const displaySim = sim;
                   const unitTag = displayUnit === 'ng/mL' ? '' : ` ${displayUnit}`;
                   return [
                     <Line
@@ -1797,10 +1945,9 @@ const App = () => {
 
                 {/* OPIOID RESPIRATORY DEPRESSION FRACTION — R/(1+R) where R = Σ Ce/RespC50.
                     Phase 5-J-3.1: instantaneous fractional resp depression (Hill γ=1).
-                    Threshold 0.5 = 50% depression (single drug at its respC50). User-
-                    toggleable via showBurdenCurve. Distinct from the cumulative AUC
-                    panel below the chart. */}
-                {activeDrugs.size > 0 && showBurdenCurve && (
+                    Phase 5-M: hidden in sedative mode — the right axis itself isn't
+                    rendered, and the burden series is opioid-only anyway. */}
+                {activeDrugs.size > 0 && chartClass === 'opioid' && showBurdenCurve && (
                   <>
                     <ReferenceLine
                       yAxisId="burden"
@@ -1875,38 +2022,8 @@ const App = () => {
             )}
           </div>
 
-          {/* Phase 5-G-2-a: per-sedative mini chart row(s).
-              Hidden entirely when no sedative is active — opioid-only sessions keep
-              the original UI exactly as before. Same X domain as main chart. */}
-          {activeSedatives.length > 0 && (
-            <div className="mt-3 space-y-2">
-              {activeSedatives.map((d) => (
-                <SedationChart
-                  key={`sed-${d}`}
-                  drug={d}
-                  sim={simByDrug.get(d)}
-                  events={events.filter((e) => (e.drug || drug) === d)}
-                  simDuration={simDuration}
-                  isClockMode={isClockMode}
-                  startTime={startTime}
-                  currentSimMinutes={currentSimMinutes}
-                  drugList={Object.keys(DRUG_UNITS)}
-                  drugUnits={DRUG_UNITS}
-                  drugShortNames={DRUG_SHORT_NAMES}
-                  clinicalDefaults={CLINICAL_DEFAULTS}
-                  lastDoseByDrug={lastDoseByDrug}
-                  quickAddBolus={quickAddBolus}
-                  quickAddInfusion={quickAddInfusion}
-                  onUpdate={handleEventUpdate}
-                  onDelete={handleEventDelete}
-                  onEventTimeChange={handleEventTimeChange}
-                  onEventDurationChange={handleEventDurationChange}
-                  chartColors={chartColors}
-                  timeZeroMinute={timeZeroMinute}
-                />
-              ))}
-            </div>
-          )}
+          {/* Phase 5-M: SedationChart mini-charts were removed. Sedative drugs now
+              render on the same main chart via the chartClass toggle (see below). */}
 
           {/* Axis Controls */}
           <div className="flex flex-col sm:flex-row justify-end mt-2 gap-4 items-center bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
