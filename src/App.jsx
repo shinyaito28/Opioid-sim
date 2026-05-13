@@ -1774,19 +1774,29 @@ const App = () => {
                       fill="#3b82f6"
                       fillOpacity={0.15}
                     />
+                    {/* Phase 5-M-1: the band represents the Ce range that, in the
+                        literature, corresponds to BIS 40-60 (general anaesthesia).
+                        Labels show min + max in the chart's display unit so it's
+                        obvious this is a concentration band, not a BIS-number band. */}
                     <ReferenceLine
                       yAxisId="left"
                       y={currentRange.bisTarget.max}
                       stroke="#2563eb"
                       strokeDasharray="3 3"
-                      label={{ value: `BIS target (${(currentRange.bisTarget.max / chartDisplay.divisor).toFixed(2)} ${chartDisplay.unit})`, position: 'insideTopRight', fill: '#1d4ed8', fontSize: 10 }}
+                      label={{
+                        value: `${t('bisTargetUpper')} ${(currentRange.bisTarget.max / chartDisplay.divisor).toFixed(2)} ${chartDisplay.unit}`,
+                        position: 'insideTopRight', fill: '#1d4ed8', fontSize: 10,
+                      }}
                     />
                     <ReferenceLine
                       yAxisId="left"
                       y={currentRange.bisTarget.min}
                       stroke="#2563eb"
                       strokeDasharray="3 3"
-                      label={{ value: `BIS lower (${(currentRange.bisTarget.min / chartDisplay.divisor).toFixed(2)})`, position: 'insideBottomRight', fill: '#1d4ed8', fontSize: 10 }}
+                      label={{
+                        value: `${t('bisTargetLower')} ${(currentRange.bisTarget.min / chartDisplay.divisor).toFixed(2)} ${chartDisplay.unit}`,
+                        position: 'insideBottomRight', fill: '#1d4ed8', fontSize: 10,
+                      }}
                     />
                   </>
                 )}

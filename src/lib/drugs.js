@@ -80,12 +80,21 @@ export const THERAPEUTIC_RANGES = {
     label: 'Analgesia (0.03-0.5) / Resp C50 ~0.5 (Lehmann 1991, Bailey 1990)'
   },
   'Propofol': {
-    // Sedative — therapeutic Ce typically 1.5-4.5 mcg/mL for sedation, 3-6 for GA (BIS 40-60).
-    // No analgesiaMin/Max or respiratoryRisk defined: Propofol is intentionally excluded from the
-    // Combined Opioid Burden Index (Phase 5-G-1 scope decision); the Bouillon synergy surface
-    // (Phase 5-G-5) will add proper hypnotic-analgesic interaction modelling.
-    bisTarget: { min: 3.0, max: 5.0 }, // mcg/mL — Schnider/Eleveld TCI band for GA
-    label: 'BIS target (3.0-5.0 mcg/mL)'
+    // Sedative — therapeutic effect-site Ce typically 1.5-4.5 mcg/mL for sedation
+    // and 3-5 mcg/mL for GA maintenance (BIS 40-60). Sources for the band:
+    //   Schnider TW et al. Anesthesiology 1999;90:1502-16  — Ce50 BIS ≈ 2.5 mcg/mL
+    //   Vuyk J  et al. Br J Anaesth 1995;75:223-9          — BIS 50 Ce ~3.4 mcg/mL
+    //   Eleveld DJ et al. Br J Anaesth 2018;120:942-59     — general-purpose PK/PD
+    //                                                         model used in this app
+    //                                                         (TIVA maintenance Ce
+    //                                                         2.5-4.5 mcg/mL typical)
+    // Phase 5-M-1: bisTarget values are now stored in **ng/mL** (matching the
+    // internal simulation unit). The chart display layer divides by chartDisplay
+    // .divisor (1000 for Propofol) at render time to show "3.00-5.00 mcg/mL".
+    // The previous value pair {3.0, 5.0} was implicitly in mcg/mL and collapsed
+    // the BIS band to y=3-5 ng/mL on the chart, far below the actual Cp range.
+    bisTarget: { min: 3000, max: 5000 }, // ng/mL = 3-5 mcg/mL Ce (BIS 40-60, GA maintenance)
+    label: 'BIS 40-60 @ Ce 3-5 mcg/mL (Schnider/Eleveld)'
   },
   'Ketamine': {
     // Sedative — S-ketamine PK only (Noppers I et al. Anesthesiology 2011;114:1435-45,
@@ -122,7 +131,11 @@ export const THERAPEUTIC_RANGES = {
     //   Ce50 BIS:        0.982 mcg/mL → general anesthesia depth
     // bisTarget below represents the typical Ce range during GA maintenance with
     // concomitant opioid (TIVA) — between MOAA/S and BIS Ce50.
-    bisTarget: { min: 0.4, max: 0.8 }, // mcg/mL Ce — typical GA maintenance band
+    // Phase 5-M-1: bisTarget moved to ng/mL units (was {0.4, 0.8} mcg/mL).
+    // 400-800 ng/mL = 0.4-0.8 mcg/mL Ce, sitting between Eleveld 2025 MOAA/S Ce50
+    // (0.182 mcg/mL = 182 ng/mL) and BIS Ce50 (0.982 mcg/mL = 982 ng/mL) — i.e.
+    // typical GA maintenance with concomitant opioid (TIVA).
+    bisTarget: { min: 400, max: 800 }, // ng/mL = 0.4-0.8 mcg/mL Ce (GA maintenance)
     label: 'GA maintenance Ce 0.4-0.8 mcg/mL (Eleveld 2025)'
   },
   'Dexmedetomidine': {

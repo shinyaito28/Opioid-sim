@@ -123,6 +123,8 @@
     "chartClassOpioid": "Opioid",
     "chartClassSedative": "Sedative",
     "chartClassTooltip": "Switch which drug class the main chart renders. Auto-estimated from active drugs; clicking either side records a manual override. Use the toggle to view one class at a time when both are in use.",
+    "bisTargetUpper": "BIS 40-60 upper Ce",
+    "bisTargetLower": "BIS 40-60 lower Ce",
     "peakExceedsRange": "↑ Peak {{value}} {{unit}} @ {{time}}min — exceeds visible range",
     "timeZero": "Time zero",
     "timeZeroNone": "Sim start",
