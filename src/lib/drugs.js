@@ -227,7 +227,9 @@ export const DRUG_COLORS = {
   Propofol:      { ce: '#0d9488', cp: '#5eead4' }, // teal — sedative class
   Remimazolam:   { ce: '#c026d3', cp: '#f0abfc' }, // fuchsia — sedative, distinguishable from teal/indigo/violet
   Ketamine:      { ce: '#e11d48', cp: '#fda4af' }, // rose — sedative, distinguishable from Mor red and other sedatives
-  Dexmedetomidine: { ce: '#4f46e5', cp: '#a5b4fc' }, // indigo — sedative class, distinguishable from Propofol teal
+  // Phase 5-N: cp colour darkened from indigo-300 (#a5b4fc) to indigo-500 (#6366f1)
+  // because the original was too pale to read on a white background.
+  Dexmedetomidine: { ce: '#3730a3', cp: '#6366f1' }, // indigo-800 / indigo-500 — readable on both light + dark backgrounds
 };
 
 // Drug class — affects whether Ce contributes to the Combined Opioid Burden Index.

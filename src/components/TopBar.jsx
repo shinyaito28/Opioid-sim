@@ -9,7 +9,7 @@ import ScenarioMenu from './ScenarioMenu';
 export default function TopBar({
   t, i18n,
   showRanges, setShowRanges,
-  patient, setPatient, autoFillStats, setAutoFillStats,
+  patient, setPatient, autoFillStats, setAutoFillStats, activeParams,
   savedScenarios, saveScenario, loadScenario, deleteScenario,
   currentScenarioId, isModified, lastSavedAt,
   isDark, setIsDark,
@@ -40,6 +40,7 @@ export default function TopBar({
           setPatient={setPatient}
           autoFillStats={autoFillStats}
           setAutoFillStats={setAutoFillStats}
+          activeParams={activeParams}
           t={t}
         />
 

@@ -1458,6 +1458,7 @@ const App = () => {
         setPatient={setPatient}
         autoFillStats={autoFillStats}
         setAutoFillStats={setAutoFillStats}
+        activeParams={activeParams}
         savedScenarios={savedScenarios}
         saveScenario={saveScenario}
         loadScenario={loadScenario}
@@ -2092,12 +2093,30 @@ const App = () => {
 
               {
                 isClockMode && (
-                  <input
-                    type="time"
-                    value={startTime}
-                    onChange={(e) => handleStartTimeChange(e.target.value)}
-                    className="text-xs border border-slate-300 dark:border-slate-600 rounded p-1 mr-2"
-                  />
+                  <div className="flex items-center gap-1 mr-2">
+                    <input
+                      type="time"
+                      value={startTime}
+                      onChange={(e) => handleStartTimeChange(e.target.value)}
+                      className="text-xs border border-slate-300 dark:border-slate-600 rounded p-1 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                    />
+                    {/* Phase 5-N: jump start-time to the wall-clock "now".
+                        Uses the same handleStartTimeChange so existing events shift
+                        consistently with manual edits. */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const now = new Date();
+                        const h = String(now.getHours()).padStart(2, '0');
+                        const m = String(now.getMinutes()).padStart(2, '0');
+                        handleStartTimeChange(`${h}:${m}`);
+                      }}
+                      className="text-[11px] bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-200 px-2 py-1 rounded border border-blue-200 dark:border-blue-800 whitespace-nowrap"
+                      title={t('clockNowTooltip')}
+                    >
+                      {t('now')}
+                    </button>
+                  </div>
                 )
               }
 
@@ -2499,7 +2518,7 @@ const App = () => {
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
                     <label className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold">{t('dose')} ({getDoseUnit()})</label>
-                    <input type="number" min="0" value={bolusAmount} onChange={e => setBolusAmount(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 h-10 text-lg font-bold text-center text-purple-700" />
+                    <input type="number" min="0" value={bolusAmount} onChange={e => setBolusAmount(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 dark:border-slate-600 rounded p-2 h-10 text-lg font-bold text-center text-purple-700 dark:text-purple-300 bg-white dark:bg-slate-800" />
                   </div>
                   <div className="w-20">
                     <label className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold flex justify-between items-center mb-0.5">
@@ -2517,10 +2536,10 @@ const App = () => {
                         type="time"
                         value={minutesToTime(bolusTime, startTime)}
                         onChange={e => setBolusTime(timeToMinutes(e.target.value, startTime))}
-                        className="w-full border rounded px-1 h-10 text-center text-sm"
+                        className="w-full border border-slate-300 dark:border-slate-600 rounded px-1 h-10 text-center text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                       />
                     ) : (
-                      <input type="number" min="0" value={bolusTime} onChange={e => setBolusTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded px-1 h-10 text-center" />
+                      <input type="number" min="0" value={bolusTime} onChange={e => setBolusTime(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 dark:border-slate-600 rounded px-1 h-10 text-center bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
                     )}
                     {isClockMode && (
                       <div className="flex gap-px mt-0.5">
@@ -2556,7 +2575,7 @@ const App = () => {
                         {DRUG_UNITS[drug]?.map(u => <option key={u} value={u}>{u}</option>)}
                       </select>
                     </label>
-                    <input type="number" min="0" value={infusionRate} onChange={e => setInfusionRate(Math.max(0, Number(e.target.value)))} className="w-full border rounded p-2 h-10 text-lg font-bold text-center text-orange-700" />
+                    <input type="number" min="0" value={infusionRate} onChange={e => setInfusionRate(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 dark:border-slate-600 rounded p-2 h-10 text-lg font-bold text-center text-orange-700 dark:text-orange-300 bg-white dark:bg-slate-800" />
                   </div>
                   <div className="w-16">
                     <label className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold flex justify-between items-center mb-0.5">
@@ -2574,10 +2593,10 @@ const App = () => {
                         type="time"
                         value={minutesToTime(infusionStartTime, startTime)}
                         onChange={e => setInfusionStartTime(timeToMinutes(e.target.value, startTime))}
-                        className="w-full border rounded px-1 h-10 text-center text-sm"
+                        className="w-full border border-slate-300 dark:border-slate-600 rounded px-1 h-10 text-center text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                       />
                     ) : (
-                      <input type="number" min="0" value={infusionStartTime} onChange={e => setInfusionStartTime(Math.max(0, Number(e.target.value)))} className="w-full border rounded px-1 h-10 text-center" />
+                      <input type="number" min="0" value={infusionStartTime} onChange={e => setInfusionStartTime(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 dark:border-slate-600 rounded px-1 h-10 text-center bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
                     )}
                     {isClockMode && (
                       <div className="flex gap-px mt-0.5">
@@ -2608,10 +2627,10 @@ const App = () => {
                             if (dur < 0) dur += 1440;
                             setInfusionDuration(dur);
                           }}
-                          className="w-full border rounded px-1 h-10 text-center text-sm"
+                          className="w-full border border-slate-300 dark:border-slate-600 rounded px-1 h-10 text-center text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                         />
                       ) : (
-                        <input type="number" min="0" value={infusionDuration} onChange={e => setInfusionDuration(Math.max(0, Number(e.target.value)))} className="w-full border rounded px-1 h-10 text-center" />
+                        <input type="number" min="0" value={infusionDuration} onChange={e => setInfusionDuration(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 dark:border-slate-600 rounded px-1 h-10 text-center bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
                       )
                     )}
                   </div>
