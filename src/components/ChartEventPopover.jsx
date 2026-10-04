@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { usePopoverPosition } from '../hooks/usePopoverPosition';
 import { Syringe, Plus, Minus, Clock, X, Trash2, Check, Edit2 } from 'lucide-react';
 import { isValidPatient, positiveInput, MAX_SIM_MINUTES } from '../lib/validation';
 import { convertFromStandardUnit } from '../lib/drugs';
@@ -44,6 +46,7 @@ export default function ChartEventPopover({
   position,            // { x, y } — pixel coords inside the chart wrapper
   containerSize,       // { w, h } — chart wrapper size for edge-clamp
   initialMinute,
+  anchorRef,
   initialDrug,
   patient,
   drugList,
@@ -72,6 +75,7 @@ export default function ChartEventPopover({
   const [duration, setDuration] = useState(60);
   const [isInfinite, setIsInfinite] = useState(true);
   const [time, setTime] = useState(initialMinute);
+  const panelStyle = usePopoverPosition({ open, panelRef: ref, anchorRef, point: position, contentKey: `${type}-${isInfinite}-${isEdit}` });
 
   // Reset everything when the popover is re-opened. In edit mode pre-fill from the
   // editingEvent; in add mode pre-fill from lastDoseByDrug like before.
@@ -150,10 +154,10 @@ export default function ChartEventPopover({
     const onKey = (e) => {
       if (e.key === 'Escape') onClose();
     };
-    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('pointerdown', onMouseDown, true);
     document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('pointerdown', onMouseDown, true);
       document.removeEventListener('keydown', onKey);
     };
   }, [open, onClose]);
@@ -209,26 +213,23 @@ export default function ChartEventPopover({
   };
 
   // Edge clamp — keep the popover inside the chart wrapper. Width fixed at ~290px for w-72.
-  const POPOVER_W = 290;
-  const POPOVER_H = 240; // approximate, used for top-clamp only
-  const wrapW = containerSize?.w || 1000;
-  const wrapH = containerSize?.h || 400;
-  const halfW = POPOVER_W / 2;
   // X clamp
-  const minLeft = halfW + 6;
-  const maxLeft = wrapW - halfW - 6;
-  const clampedX = Math.max(minLeft, Math.min(position.x, maxLeft));
   // Y clamp — try above the click; if not enough room, drop below
-  const placeAbove = position.y >= POPOVER_H + 12;
-  const yTransform = placeAbove ? 'translate(-50%, -110%)' : 'translate(-50%, 12px)';
-  const clampedY = Math.max(0, Math.min(position.y, wrapH));
 
-  return (
+  return createPortal(
     <div
       data-testid="event-popover"
       ref={ref}
-      className="absolute z-50 glass shadow-xl border border-slate-300 dark:border-slate-600 rounded-lg p-3 w-72 select-none"
-      style={{ left: clampedX, top: clampedY, transform: yTransform }}
+      role="dialog"
+      aria-label={isEdit ? t('editingEventLabel') : t('dose')}
+      className="fixed z-20 glass shadow-xl border border-slate-300 dark:border-slate-600 rounded-lg p-3 w-72 select-none overflow-y-auto overscroll-contain [&_input]:text-base [&_select]:text-base"
+      style={panelStyle}
+      onPointerDown={(e) => e.stopPropagation()}
+      onPointerMove={(e) => e.stopPropagation()}
+      onPointerUp={(e) => e.stopPropagation()}
+      onPointerCancel={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
@@ -313,7 +314,7 @@ export default function ChartEventPopover({
             step="any"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && valEntered) handleAdd(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && valEntered) isEdit ? handleUpdate() : handleAdd(); }}
             placeholder={t('dose')}
             className="w-20 border border-slate-300 dark:border-slate-600 rounded px-2 py-1.5 text-sm font-bold text-center bg-purple-50 text-purple-900 focus:ring-2 focus:ring-purple-300 focus:outline-none"
           />
@@ -334,7 +335,7 @@ export default function ChartEventPopover({
             step="any"
             value={rate}
             onChange={(e) => setRate(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && valEntered) handleAdd(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && valEntered) isEdit ? handleUpdate() : handleAdd(); }}
             placeholder={t('rate')}
             className="w-20 border border-slate-300 dark:border-slate-600 rounded px-2 py-1.5 text-sm font-bold text-center bg-orange-50 text-orange-900 focus:ring-2 focus:ring-orange-300 focus:outline-none"
           />
@@ -432,6 +433,6 @@ export default function ChartEventPopover({
           Add
         </button>
       )}
-    </div>
+    </div>, document.body
   );
 }

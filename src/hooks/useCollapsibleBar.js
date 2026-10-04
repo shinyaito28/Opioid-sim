@@ -10,7 +10,7 @@ const COLLAPSE_DELAY_MS = 5000;
 // Auto-collapse fires COLLAPSE_DELAY_MS after the last interaction, but only
 // when pref === 'auto' and canCollapse is true. bumpInteraction() resets the
 // timer; expand() forces expanded immediately.
-export const useCollapsibleBar = ({ canCollapse }) => {
+export const useCollapsibleBar = ({ canCollapse, holdOpen = false }) => {
   const [pref, setPrefState] = useState(() => {
     try {
       const v = localStorage.getItem(STORAGE_KEY);
@@ -31,12 +31,12 @@ export const useCollapsibleBar = ({ canCollapse }) => {
 
   const scheduleCollapse = useCallback(() => {
     clearTimer();
-    if (pref !== 'auto' || !canCollapse) return;
+    if (pref !== 'auto' || !canCollapse || holdOpen) return;
     timerRef.current = setTimeout(() => {
       setMode('collapsed');
       timerRef.current = null;
     }, COLLAPSE_DELAY_MS);
-  }, [pref, canCollapse]);
+  }, [pref, canCollapse, holdOpen]);
 
   const expand = useCallback(() => {
     clearTimer();
@@ -79,6 +79,13 @@ export const useCollapsibleBar = ({ canCollapse }) => {
       setMode('expanded');
     }
   }, [canCollapse]);
+
+  // Keep keyboard users' focused form open; resume the existing idle timer on blur.
+  useEffect(() => {
+    if (holdOpen) clearTimer();
+    else if (mode === 'expanded') scheduleCollapse();
+    return clearTimer;
+  }, [holdOpen, mode, scheduleCollapse]);
 
   return { mode, pref, expand, collapse, toggle, bumpInteraction, setPref };
 };

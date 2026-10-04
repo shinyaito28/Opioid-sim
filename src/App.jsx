@@ -1836,6 +1836,7 @@ const App = () => {
                 logic. Outside-click + Escape close inside the component. */}
             {chartPopover.open && (
               <ChartEventPopover
+                anchorRef={chartWrapperRef}
                 open
                 onClose={() => setChartPopover((p) => ({ ...p, open: false }))}
                 position={{ x: chartPopover.x, y: chartPopover.y }}

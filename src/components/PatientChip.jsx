@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
-import { User, ChevronDown, ChevronUp, Wand2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { User, ChevronDown, ChevronUp, Wand2, X } from 'lucide-react';
+import { usePopoverPosition } from '../hooks/usePopoverPosition';
 import { useCollapsibleBar } from '../hooks/useCollapsibleBar';
 import { isValidPatient } from '../lib/validation';
 
@@ -18,23 +19,31 @@ export default function PatientChip({ patient, setPatient, autoFillStats, setAut
     </span>
   );
   const fieldCls = (p) =>
-    `w-full border rounded p-1.5 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 ${
+    `w-full min-w-0 text-base border rounded p-1.5 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 ${
       isUnused(p)
         ? 'border-slate-200 dark:border-slate-700 opacity-50'
         : 'border-slate-300 dark:border-slate-600'
     }`;
   const valid = isValidPatient(patient);
-  const { mode, toggle, collapse, bumpInteraction } = useCollapsibleBar({ canCollapse: valid });
+  const [focused, setFocused] = useState(false);
+  const { mode, toggle, collapse, bumpInteraction } = useCollapsibleBar({ canCollapse: valid, holdOpen: focused });
   const popoverRef = useRef(null);
+  const panelRef = useRef(null);
+  const panelStyle = usePopoverPosition({ open: mode === 'expanded', panelRef, anchorRef: popoverRef });
 
   // Close on outside click
   useEffect(() => {
     if (mode !== 'expanded') return undefined;
     const handler = (e) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target)) collapse();
+      if (popoverRef.current && !popoverRef.current.contains(e.target)) { setFocused(false); collapse(); }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    const onKey = (e) => { if (e.key === 'Escape') { setFocused(false); collapse(); popoverRef.current?.querySelector('button')?.focus(); } };
+    document.addEventListener('pointerdown', handler, true);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', handler, true);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [mode, collapse]);
 
   const summary = `${patient.age}y ${patient.gender === 'female' ? 'F' : 'M'} ${patient.weight}kg ${patient.height}cm`;
@@ -47,6 +56,8 @@ export default function PatientChip({ patient, setPatient, autoFillStats, setAut
   return (
     <div className="relative" ref={popoverRef}>
       <button
+        data-testid="patient-toggle"
+        aria-expanded={mode === 'expanded'}
         onClick={toggle}
         className="flex items-center gap-1.5 bg-slate-700/80 hover:bg-slate-600 text-slate-100 px-2.5 py-1 rounded text-xs whitespace-nowrap transition-colors"
         title={t('patientSettings')}
@@ -58,10 +69,17 @@ export default function PatientChip({ patient, setPatient, autoFillStats, setAut
 
       {mode === 'expanded' && (
         <div
-          className="absolute top-full mt-1 right-0 sm:right-auto sm:left-0 glass shadow-xl border border-slate-300 dark:border-slate-600 rounded-lg p-3 z-50 w-72 text-slate-800 dark:text-slate-100"
+          ref={panelRef}
+          data-testid="patient-popover"
+          role="dialog"
+          aria-label={t('patientSettings')}
+          style={panelStyle}
+          className="fixed glass shadow-xl border border-slate-300 dark:border-slate-600 rounded-lg p-3 z-50 w-72 overflow-y-auto overscroll-contain text-slate-800 dark:text-slate-100"
+          onFocusCapture={() => setFocused(true)}
+          onBlurCapture={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <div className="flex justify-between items-center mb-2 border-b border-slate-200 dark:border-slate-700 pb-2">
+          <div className="flex flex-wrap gap-1 justify-between items-center mb-2 border-b border-slate-200 dark:border-slate-700 pb-2">
             <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
               <User className="w-4 h-4" />
               <h3 className="font-bold text-sm">{t('patientSettings')}</h3>
@@ -76,6 +94,7 @@ export default function PatientChip({ patient, setPatient, autoFillStats, setAut
               />
               <span>{t('autoAdjust')}</span>
             </label>
+            <button onClick={() => { setFocused(false); collapse(); popoverRef.current?.querySelector('button')?.focus(); }} aria-label="Close" className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-white"><X className="w-4 h-4" /></button>
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-sm">

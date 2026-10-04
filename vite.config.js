@@ -2,6 +2,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Fetch a distinct HTML URL when updating an installed PWA's app shell.
+const appShellUrl = '/index.html?pwa-shell=viewport-safe-area-v2';
+
 export default defineConfig({
   plugins: [
     react(),
@@ -29,7 +32,8 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
-        navigateFallback: '/index.html',
+        modifyURLPrefix: { 'index.html': appShellUrl.slice(1) },
+        navigateFallback: appShellUrl,
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.destination === 'image',
