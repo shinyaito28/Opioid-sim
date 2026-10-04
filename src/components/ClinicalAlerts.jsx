@@ -35,7 +35,7 @@ export default function ClinicalAlerts({ alerts, t }) {
     return (
       <div className="border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-2.5 text-xs flex items-center gap-2 text-emerald-700 dark:text-emerald-200">
         <ShieldCheck className="w-4 h-4 shrink-0" />
-        <span>{t('alertsStable')}</span>
+        <span>{t('alertsStable')} <span className="block mt-1">{t('alertsDisclaimer')}</span></span>
       </div>
     );
   }

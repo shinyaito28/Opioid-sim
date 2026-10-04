@@ -67,12 +67,14 @@ export default function TopBar({
         <div className="flex bg-slate-700 rounded p-0.5 gap-0.5">
           <button
             onClick={() => i18n.changeLanguage('en')}
+            data-testid="language-en" aria-pressed={i18n.language === 'en'}
             className={`px-2 py-0.5 text-xs rounded ${i18n.language === 'en' ? 'bg-blue-500 text-white' : 'text-slate-300 hover:bg-slate-600'}`}
           >
             EN
           </button>
           <button
             onClick={() => i18n.changeLanguage('ja')}
+            data-testid="language-ja" aria-pressed={i18n.language === 'ja'}
             className={`px-2 py-0.5 text-xs rounded ${i18n.language === 'ja' ? 'bg-blue-500 text-white' : 'text-slate-300 hover:bg-slate-600'}`}
           >
             JP

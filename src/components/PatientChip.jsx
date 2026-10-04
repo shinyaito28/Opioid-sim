@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { User, ChevronDown, ChevronUp, Wand2 } from 'lucide-react';
 import { useCollapsibleBar } from '../hooks/useCollapsibleBar';
+import { isValidPatient } from '../lib/validation';
 
 // Compact patient summary chip with click-to-expand form.
 // Collapsed: "45y M 70kg 170cm" — fits in a 200px wide button.
@@ -22,7 +23,7 @@ export default function PatientChip({ patient, setPatient, autoFillStats, setAut
         ? 'border-slate-200 dark:border-slate-700 opacity-50'
         : 'border-slate-300 dark:border-slate-600'
     }`;
-  const valid = patient.weight > 0 && patient.height > 0 && patient.age >= 0;
+  const valid = isValidPatient(patient);
   const { mode, toggle, collapse, bumpInteraction } = useCollapsibleBar({ canCollapse: valid });
   const popoverRef = useRef(null);
 
@@ -86,8 +87,8 @@ export default function PatientChip({ patient, setPatient, autoFillStats, setAut
                 type="number"
                 inputMode="decimal"
                 min="0"
-                value={patient.age}
-                onChange={(e) => update('age', Math.max(0, Number(e.target.value)))}
+                value={Number.isFinite(patient.age) ? patient.age : ""}
+                onChange={(e) => update('age', parseFloat(e.target.value))}
                 className={fieldCls('age')}
               />
             </div>
@@ -113,8 +114,8 @@ export default function PatientChip({ patient, setPatient, autoFillStats, setAut
                 type="number"
                 inputMode="decimal"
                 min="0"
-                value={patient.weight}
-                onChange={(e) => update('weight', Math.max(0, Number(e.target.value)))}
+                value={Number.isFinite(patient.weight) ? patient.weight : ""}
+                onChange={(e) => update('weight', parseFloat(e.target.value))}
                 className={fieldCls('weight')}
               />
             </div>
@@ -127,8 +128,8 @@ export default function PatientChip({ patient, setPatient, autoFillStats, setAut
                 type="number"
                 inputMode="decimal"
                 min="0"
-                value={patient.height}
-                onChange={(e) => update('height', Math.max(0, Number(e.target.value)))}
+                value={Number.isFinite(patient.height) ? patient.height : ""}
+                onChange={(e) => update('height', parseFloat(e.target.value))}
                 className={fieldCls('height')}
               />
             </div>

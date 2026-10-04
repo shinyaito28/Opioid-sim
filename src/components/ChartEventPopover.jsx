@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Syringe, Plus, Minus, Clock, X, Trash2, Check, Edit2 } from 'lucide-react';
+import { isValidPatient, positiveInput, MAX_SIM_MINUTES } from '../lib/validation';
+import { convertFromStandardUnit } from '../lib/drugs';
 
 // Per-drug bolus stepper increment — mirrors QuickEntry's table.
 const DRUG_DOSE_STEPS = {
@@ -43,6 +45,7 @@ export default function ChartEventPopover({
   containerSize,       // { w, h } — chart wrapper size for edge-clamp
   initialMinute,
   initialDrug,
+  patient,
   drugList,
   drugUnits,
   drugShortNames,
@@ -90,7 +93,10 @@ export default function ChartEventPopover({
         setDuration(last?.infusionDuration != null ? last.infusionDuration : 60);
         setIsInfinite(typeof last?.isInfinite === 'boolean' ? last.isInfinite : true);
       } else {
-        setRate(String(editingEvent.originalRate ?? editingEvent.rate ?? ''));
+        const editUnit = editingEvent.originalUnit && drugUnits[evDrug]?.includes(editingEvent.originalUnit)
+          ? editingEvent.originalUnit : drugUnits[evDrug][0];
+        try { setRate(String(convertFromStandardUnit(editingEvent.rate,editUnit,patient.weight,evDrug))); }
+        catch { setRate(''); }
         setUnit(editingEvent.originalUnit && drugUnits[evDrug]?.includes(editingEvent.originalUnit)
           ? editingEvent.originalUnit
           : (drugUnits[evDrug]?.[0] || 'mcg/kg/hr'));
@@ -120,6 +126,7 @@ export default function ChartEventPopover({
 
   // Drug switch within the popover — re-pull defaults for the new drug, keep the time.
   useEffect(() => {
+    if (editingEvent && drug === (editingEvent.drug || initialDrug)) return;
     const last = lastDoseByDrug?.[drug];
     if (last?.bolusAmount != null) setAmount(String(last.bolusAmount));
     else setAmount('');
@@ -155,9 +162,9 @@ export default function ChartEventPopover({
 
   const doseUnit = clinicalDefaults[drug]?.unit || 'mcg';
   const step = DRUG_DOSE_STEPS[drug] ?? 1;
-  const valEntered = type === 'bolus'
-    ? !!amount && parseFloat(amount) > 0
-    : !!rate && parseFloat(rate) > 0;
+  const valEntered = isValidPatient(patient) && Number.isFinite(time) && Math.abs(time) <= MAX_SIM_MINUTES &&
+    (type === 'bolus' ? positiveInput(amount) : positiveInput(rate) &&
+      (isInfinite || (positiveInput(duration) && Number(duration) <= MAX_SIM_MINUTES)));
 
   const stepAmount = (delta) => {
     const cur = parseFloat(amount) || 0;
@@ -168,9 +175,9 @@ export default function ChartEventPopover({
   const handleAdd = () => {
     if (!valEntered) return;
     if (type === 'bolus') {
-      quickAddBolus(drug, parseFloat(amount), time);
+      if (!quickAddBolus(drug, parseFloat(amount), time)) return;
     } else {
-      quickAddInfusion(drug, parseFloat(rate), unit, time, parseFloat(duration), isInfinite);
+      if (!quickAddInfusion(drug, parseFloat(rate), unit, time, parseFloat(duration), isInfinite)) return;
     }
     onClose();
   };
@@ -180,9 +187,9 @@ export default function ChartEventPopover({
   const handleUpdate = () => {
     if (!editingEvent || !valEntered) return;
     if (type === 'bolus') {
-      onUpdate(editingEvent.id, { drug, type: 'bolus', time, amount: parseFloat(amount) });
+      if (!onUpdate(editingEvent.id, { drug, type: 'bolus', time, amount: parseFloat(amount) })) return;
     } else {
-      onUpdate(editingEvent.id, {
+      if (!onUpdate(editingEvent.id, {
         drug,
         type: 'infusion',
         time,
@@ -190,7 +197,7 @@ export default function ChartEventPopover({
         unit,
         duration: parseFloat(duration),
         isInfinite,
-      });
+      })) return;
     }
     onClose();
   };
@@ -218,6 +225,7 @@ export default function ChartEventPopover({
 
   return (
     <div
+      data-testid="event-popover"
       ref={ref}
       className="absolute z-50 glass shadow-xl border border-slate-300 dark:border-slate-600 rounded-lg p-3 w-72 select-none"
       style={{ left: clampedX, top: clampedY, transform: yTransform }}
@@ -376,8 +384,8 @@ export default function ChartEventPopover({
         </button>
         <input
           type="number"
-          value={time}
-          onChange={(e) => setTime(parseFloat(e.target.value) || 0)}
+          value={Number.isFinite(time) ? time : ''}
+          onChange={(e) => setTime(parseFloat(e.target.value))}
           className="w-16 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-center font-mono"
         />
         <span className="text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500">min</span>

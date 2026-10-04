@@ -30,20 +30,22 @@ export function computeBurdenAUC(simData, range) {
   const hasBand = aMin != null && aMax != null;
 
   for (let i = 0; i < simData.length - 1; i++) {
+    if (simData[i].ce == null || simData[i+1].ce == null) continue;
+    const dt = simData[i+1].time - simData[i].time;
     const c1 = simData[i].ce ?? 0;
     const c2 = simData[i + 1].ce ?? 0;
     // 1-minute step → trapezoid area = (c1 + c2) / 2 * 1
-    total += (c1 + c2) / 2;
+    total += (c1 + c2) / 2 * dt;
     if (hasBand) {
       // Therapeutic AUC: clip Ce to [aMin, aMax], then subtract aMin so the area
       // counted is the height above aMin within the band.
       const cl1 = Math.min(Math.max(c1, aMin), aMax) - aMin;
       const cl2 = Math.min(Math.max(c2, aMin), aMax) - aMin;
-      therapeutic += (cl1 + cl2) / 2;
+      therapeutic += (cl1 + cl2) / 2 * dt;
       // Supratherapeutic AUC: max(0, Ce - aMax)
       const s1 = Math.max(0, c1 - aMax);
       const s2 = Math.max(0, c2 - aMax);
-      supra += (s1 + s2) / 2;
+      supra += (s1 + s2) / 2 * dt;
     }
   }
   return { total, therapeutic, supra };

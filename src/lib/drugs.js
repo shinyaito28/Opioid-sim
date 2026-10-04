@@ -1,3 +1,4 @@
+import { finite, validatePatient, validateParams } from './validation.js';
 // Drug data, PK parameters, and unit-conversion helpers.
 // Pure data + pure functions — no React, no DOM, safe to import anywhere (incl. tests).
 
@@ -391,11 +392,11 @@ const getEleveldPropofol = (patient, { opioidCoadmin = true, arterialSampling = 
 };
 
 // 3-compartment + effect-site PK parameters keyed by (drug, model). Falls back to a benign
-// V1=1 stub when weight is invalid — caller must check and avoid simulating in that case
-// (Phase 5-D's QuickEntry surfaces a red banner; Phase 5-C will gate the simulation memo).
+// Reject invalid attributes/parameters; the caller pauses results and shows an error.
 export const getPKParameters = (drug, model, patient) => {
   const { age, weight, height, gender } = patient;
-  if (!weight || weight <= 0) return { V1: 1, V2: 1, V3: 0, Cl: 1, Q2: 0, Q3: 0, ke0: 0.1 };
+  validatePatient(patient);
+  if (!AVAILABLE_MODELS[drug]?.includes(model)) throw new RangeError('Unknown drug/model');
 
   let params = { V1: 0, V2: 0, V3: 0, Cl: 0, Q2: 0, Q3: 0, ke0: 0 };
 
@@ -406,12 +407,15 @@ export const getPKParameters = (drug, model, patient) => {
       // "An allometric pharmacokinetic model and minimum effective analgesic concentration of
       // fentanyl in patients undergoing major abdominal surgery." Adults; allometric scaling on W/70.
       const wRatio = weight / 70;
-      params.V1 = 10.1 * (wRatio ** 1.0);
-      params.V2 = 26.5 * (wRatio ** 1.0);
-      params.V3 = 206.0 * (wRatio ** 1.0);
-      params.Cl = 0.704 * (wRatio ** 0.75);
-      params.Q2 = 2.38 * (wRatio ** 0.75);
-      params.Q3 = 1.49 * (wRatio ** 0.75);
+      // Bae 2020 Table 2, p980: estimated theta7=1.23 (volumes, L),
+      // theta8=0.313 (CL/Q, L/min), not the conventional fixed 1/0.75.
+      // DOI:10.1016/j.bja.2020.06.066. Paper Q1/Q2 are this app's Q2/Q3.
+      params.V1 = 10.1 * (wRatio ** 1.23);
+      params.V2 = 26.5 * (wRatio ** 1.23);
+      params.V3 = 206.0 * (wRatio ** 1.23);
+      params.Cl = 0.704 * (wRatio ** 0.313);
+      params.Q2 = 2.38 * (wRatio ** 0.313);
+      params.Q3 = 1.49 * (wRatio ** 0.313);
       params.ke0 = 0.147;
     } else if (model === 'Shafer (Adult)') {
       // Reference: Shafer SL et al. Anesthesiology 1990;73:1091-1102. PMID:2248388.
@@ -432,10 +436,6 @@ export const getPKParameters = (drug, model, patient) => {
       params.V1 = 4.61 * wRatio; params.V2 = 16.9 * wRatio; params.V3 = 189 * wRatio;
       params.Cl = 0.78 * wRatio; params.Q2 = 1.25 * wRatio; params.Q3 = 0.96 * wRatio;
       params.ke0 = 0.13;
-    } else {
-      const wRatio = weight / 70;
-      params.V1 = 10.1 * wRatio; params.V2 = 26.5 * wRatio; params.V3 = 206 * wRatio;
-      params.Cl = 0.704 * (wRatio ** 0.75); params.Q2 = 2.38 * (wRatio ** 0.75); params.Q3 = 1.49 * (wRatio ** 0.75); params.ke0 = 0.147;
     }
   }
   // --- REMIFENTANIL ---
@@ -699,14 +699,16 @@ export const getPKParameters = (drug, model, patient) => {
     }
   }
 
-  if (isNaN(params.V1) || params.V1 <= 0.1) params.V1 = 1.0;
-  return params;
+  return validateParams(params);
 };
 
 // --- Unit conversion ---
 // Standard unit: mcg/hr for mcg drugs, mg/hr for mg drugs.
 
 export const convertToStandardUnit = (rate, unit, weight, drug) => {
+  finite(rate, 'rate');
+  if (!DRUG_UNITS[drug]?.includes(unit)) throw new RangeError('Unknown infusion unit');
+  if (unit.includes('/kg')) finite(weight, 'weight', { positive: true });
   const isMgDrug = MG_DRUGS.includes(drug);
   let valInMcgHr = 0;
   switch (unit) {
@@ -716,14 +718,18 @@ export const convertToStandardUnit = (rate, unit, weight, drug) => {
     case 'mcg/min': valInMcgHr = rate * 60; break;
     case 'mcg/kg/hr': valInMcgHr = rate * weight; break;
     case 'mg/kg/hr': valInMcgHr = rate * weight * 1000; break;
-    default: valInMcgHr = rate;
+    default: throw new RangeError('Unknown infusion unit');
   }
-  return isMgDrug ? valInMcgHr / 1000 : valInMcgHr;
+  return finite(isMgDrug ? valInMcgHr / 1000 : valInMcgHr, 'converted rate');
 };
 
 export const convertFromStandardUnit = (standardRate, targetUnit, weight, drug) => {
+  finite(standardRate, 'rate');
+  if (!DRUG_UNITS[drug]?.includes(targetUnit)) throw new RangeError('Unknown infusion unit');
+  if (targetUnit.includes('/kg')) finite(weight, 'weight', { positive: true });
   const isMgDrug = MG_DRUGS.includes(drug);
   const valInMcgHr = isMgDrug ? standardRate * 1000 : standardRate;
+  finite(valInMcgHr, 'converted rate');
   switch (targetUnit) {
     case 'mcg/hr': return valInMcgHr;
     case 'mg/hr': return valInMcgHr / 1000;
@@ -731,6 +737,6 @@ export const convertFromStandardUnit = (standardRate, targetUnit, weight, drug) 
     case 'mcg/min': return valInMcgHr / 60;
     case 'mcg/kg/hr': return valInMcgHr / weight;
     case 'mg/kg/hr': return valInMcgHr / (weight * 1000);
-    default: return standardRate;
+    default: throw new RangeError('Unknown infusion unit');
   }
 };

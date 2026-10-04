@@ -8,7 +8,8 @@ const STORAGE_KEY = 'opioid-sim-theme';
 export function useDarkMode() {
   const [isDark, setIsDark] = useState(() => {
     if (typeof window === 'undefined') return false;
-    const stored = localStorage.getItem(STORAGE_KEY);
+    let stored;
+    try { stored = localStorage.getItem(STORAGE_KEY); } catch { /* Theme falls back to OS. */ }
     if (stored === 'dark') return true;
     if (stored === 'light') return false;
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
@@ -16,7 +17,7 @@ export function useDarkMode() {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
-    localStorage.setItem(STORAGE_KEY, isDark ? 'dark' : 'light');
+    try { localStorage.setItem(STORAGE_KEY, isDark ? 'dark' : 'light'); } catch { /* Cosmetic preference is optional. */ }
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', isDark ? '#0f172a' : '#1e293b');
   }, [isDark]);

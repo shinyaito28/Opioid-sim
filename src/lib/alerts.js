@@ -17,6 +17,7 @@
  * same id and so don't churn keys across re-renders.
  */
 
+import { durationAbove } from './metrics.js';
 // Threshold constants (centralised so they show up in one place).
 const RED_DURATION_MIN = 5;          // sustained-respiratory-depression window
 const DEEP_DEPRESSION_FRACTION = 0.7; // R/(1+R) — 70% ventilatory depression
@@ -31,14 +32,14 @@ export function computeAlerts({ simByDrug, ranges, events, activeOpioids, simDur
   for (const drug of activeOpioids) {
     const sim = simByDrug.get(drug);
     const range = ranges[drug];
-    if (!sim || !sim.length || !range) continue;
+    if (!sim || !sim.length || !range || !sim.some(p => p.ce != null)) continue;
     const { analgesiaMin, analgesiaMax, respiratoryRisk } = range;
 
     // Peak Ce + threshold-crossing analysis.
     let peakCe = 0;
     let peakAt = 0;
     let consecAboveResp = 0;
-    let maxConsecAboveResp = 0;
+    let maxConsecAboveResp = durationAbove(sim, respiratoryRisk, 'ce', true) ?? 0;
     let everReachedAnalgesia = false;
     let lastAboveAnalgesiaMin = -1;
     for (const p of sim) {
@@ -46,7 +47,6 @@ export function computeAlerts({ simByDrug, ranges, events, activeOpioids, simDur
       if (ce > peakCe) { peakCe = ce; peakAt = p.time; }
       if (respiratoryRisk != null && ce >= respiratoryRisk) {
         consecAboveResp += 1;
-        if (consecAboveResp > maxConsecAboveResp) maxConsecAboveResp = consecAboveResp;
       } else {
         consecAboveResp = 0;
       }
@@ -64,7 +64,7 @@ export function computeAlerts({ simByDrug, ranges, events, activeOpioids, simDur
         drug,
         titleKey: 'alertSustainedRespTitle',
         bodyKey: 'alertSustainedRespBody',
-        bodyParams: { drug, minutes: maxConsecAboveResp, threshold: respiratoryRisk },
+        bodyParams: { drug, minutes: Number(maxConsecAboveResp.toFixed(1)), threshold: respiratoryRisk },
       });
     }
 
@@ -123,7 +123,8 @@ export function computeAlerts({ simByDrug, ranges, events, activeOpioids, simDur
   // 🔴 Σ Ce/respC50 → R/(1+R) > 0.7 anywhere (severe combined depression).
   let maxDepression = 0;
   let maxDepressionAt = 0;
-  const len = simDuration + 1;
+  const sampleTimes = (simByDrug.get(activeOpioids[0]) || []).map(p => p.time);
+  const len = sampleTimes.length;
   for (let t = 0; t < len; t++) {
     let R = 0;
     for (const drug of activeOpioids) {
@@ -135,7 +136,7 @@ export function computeAlerts({ simByDrug, ranges, events, activeOpioids, simDur
       R += (point.ce || 0) / respRisk;
     }
     const dep = R / (1 + R);
-    if (dep > maxDepression) { maxDepression = dep; maxDepressionAt = t; }
+    if (dep > maxDepression) { maxDepression = dep; maxDepressionAt = sampleTimes[t]; }
   }
   if (maxDepression >= DEEP_DEPRESSION_FRACTION) {
     alerts.push({

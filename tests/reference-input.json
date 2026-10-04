@@ -1,0 +1,650 @@
+[
+  {
+    "drug": "Fentanyl",
+    "model": "Bae (2020) Adult",
+    "patient": {
+      "age": 18,
+      "weight": 35,
+      "height": 150,
+      "gender": "female"
+    },
+    "params": {
+      "V1": 4.305806203428181,
+      "V2": 11.297412315925426,
+      "V3": 87.82139385209955,
+      "Cl": 0.5666961608852698,
+      "Q2": 1.9158194075382697,
+      "Q3": 1.1993995450554715,
+      "ke0": 0.147
+    },
+    "duration": 30.5,
+    "events": [
+      {
+        "id": "a",
+        "drug": "Fentanyl",
+        "type": "bolus",
+        "time": 0,
+        "amount": 100
+      },
+      {
+        "id": "b",
+        "drug": "Fentanyl",
+        "type": "infusion",
+        "time": 2.5,
+        "rate": 200,
+        "duration": 10.25,
+        "isInfinite": false
+      },
+      {
+        "id": "c",
+        "drug": "Fentanyl",
+        "type": "bolus",
+        "time": 8.1,
+        "amount": 50
+      },
+      {
+        "id": "d",
+        "drug": "Fentanyl",
+        "type": "infusion",
+        "time": 10.2,
+        "rate": 100,
+        "duration": 5,
+        "isInfinite": false
+      }
+    ]
+  },
+  {
+    "drug": "Fentanyl",
+    "model": "Bae (2020) Adult",
+    "patient": {
+      "age": 35,
+      "weight": 70,
+      "height": 170,
+      "gender": "male"
+    },
+    "params": {
+      "V1": 10.1,
+      "V2": 26.5,
+      "V3": 206,
+      "Cl": 0.704,
+      "Q2": 2.38,
+      "Q3": 1.49,
+      "ke0": 0.147
+    },
+    "duration": 30.5,
+    "events": [
+      {
+        "id": "a",
+        "drug": "Fentanyl",
+        "type": "bolus",
+        "time": 0,
+        "amount": 100
+      },
+      {
+        "id": "b",
+        "drug": "Fentanyl",
+        "type": "infusion",
+        "time": 2.5,
+        "rate": 200,
+        "duration": 10.25,
+        "isInfinite": false
+      },
+      {
+        "id": "c",
+        "drug": "Fentanyl",
+        "type": "bolus",
+        "time": 8.1,
+        "amount": 50
+      },
+      {
+        "id": "d",
+        "drug": "Fentanyl",
+        "type": "infusion",
+        "time": 10.2,
+        "rate": 100,
+        "duration": 5,
+        "isInfinite": false
+      }
+    ]
+  },
+  {
+    "drug": "Fentanyl",
+    "model": "Bae (2020) Adult",
+    "patient": {
+      "age": 80,
+      "weight": 100,
+      "height": 180,
+      "gender": "female"
+    },
+    "params": {
+      "V1": 15.662128563043066,
+      "V2": 41.09370365550904,
+      "V3": 319.4453944541457,
+      "Cl": 0.7871490445187316,
+      "Q2": 2.6611004630036663,
+      "Q3": 1.6659830629728836,
+      "ke0": 0.147
+    },
+    "duration": 30.5,
+    "events": [
+      {
+        "id": "a",
+        "drug": "Fentanyl",
+        "type": "bolus",
+        "time": 0,
+        "amount": 100
+      },
+      {
+        "id": "b",
+        "drug": "Fentanyl",
+        "type": "infusion",
+        "time": 2.5,
+        "rate": 200,
+        "duration": 10.25,
+        "isInfinite": false
+      },
+      {
+        "id": "c",
+        "drug": "Fentanyl",
+        "type": "bolus",
+        "time": 8.1,
+        "amount": 50
+      },
+      {
+        "id": "d",
+        "drug": "Fentanyl",
+        "type": "infusion",
+        "time": 10.2,
+        "rate": 100,
+        "duration": 5,
+        "isInfinite": false
+      }
+    ]
+  },
+  {
+    "drug": "Hydromorphone",
+    "model": "Jeleazcov (2014) Adult",
+    "patient": {
+      "age": 18,
+      "weight": 35,
+      "height": 150,
+      "gender": "female"
+    },
+    "params": {
+      "V1": 1.675,
+      "V2": 6.95,
+      "V3": 72.5,
+      "Cl": 0.8948188936837974,
+      "Q2": 0.8740672295269999,
+      "Q3": 0.8383910160769182,
+      "ke0": 0.02
+    },
+    "duration": 30.5,
+    "events": [
+      {
+        "id": "a",
+        "drug": "Hydromorphone",
+        "type": "bolus",
+        "time": 0,
+        "amount": 0.5
+      },
+      {
+        "id": "b",
+        "drug": "Hydromorphone",
+        "type": "infusion",
+        "time": 2.5,
+        "rate": 1,
+        "duration": 10.25,
+        "isInfinite": false
+      },
+      {
+        "id": "c",
+        "drug": "Hydromorphone",
+        "type": "bolus",
+        "time": 8.1,
+        "amount": 0.25
+      },
+      {
+        "id": "d",
+        "drug": "Hydromorphone",
+        "type": "infusion",
+        "time": 10.2,
+        "rate": 0.5,
+        "duration": 5,
+        "isInfinite": false
+      }
+    ]
+  },
+  {
+    "drug": "Hydromorphone",
+    "model": "Jeleazcov (2014) Adult",
+    "patient": {
+      "age": 35,
+      "weight": 70,
+      "height": 170,
+      "gender": "male"
+    },
+    "params": {
+      "V1": 3.35,
+      "V2": 13.9,
+      "V3": 145,
+      "Cl": 1.3332000000000002,
+      "Q2": 1.47,
+      "Q3": 1.41,
+      "ke0": 0.02
+    },
+    "duration": 30.5,
+    "events": [
+      {
+        "id": "a",
+        "drug": "Hydromorphone",
+        "type": "bolus",
+        "time": 0,
+        "amount": 0.5
+      },
+      {
+        "id": "b",
+        "drug": "Hydromorphone",
+        "type": "infusion",
+        "time": 2.5,
+        "rate": 1,
+        "duration": 10.25,
+        "isInfinite": false
+      },
+      {
+        "id": "c",
+        "drug": "Hydromorphone",
+        "type": "bolus",
+        "time": 8.1,
+        "amount": 0.25
+      },
+      {
+        "id": "d",
+        "drug": "Hydromorphone",
+        "type": "infusion",
+        "time": 10.2,
+        "rate": 0.5,
+        "duration": 5,
+        "isInfinite": false
+      }
+    ]
+  },
+  {
+    "drug": "Hydromorphone",
+    "model": "Jeleazcov (2014) Adult",
+    "patient": {
+      "age": 80,
+      "weight": 100,
+      "height": 180,
+      "gender": "female"
+    },
+    "params": {
+      "V1": 4.785714285714286,
+      "V2": 19.857142857142858,
+      "V3": 207.14285714285714,
+      "Cl": 1.1481988204803626,
+      "Q2": 1.9208515603802583,
+      "Q3": 1.8424494558749416,
+      "ke0": 0.02
+    },
+    "duration": 30.5,
+    "events": [
+      {
+        "id": "a",
+        "drug": "Hydromorphone",
+        "type": "bolus",
+        "time": 0,
+        "amount": 0.5
+      },
+      {
+        "id": "b",
+        "drug": "Hydromorphone",
+        "type": "infusion",
+        "time": 2.5,
+        "rate": 1,
+        "duration": 10.25,
+        "isInfinite": false
+      },
+      {
+        "id": "c",
+        "drug": "Hydromorphone",
+        "type": "bolus",
+        "time": 8.1,
+        "amount": 0.25
+      },
+      {
+        "id": "d",
+        "drug": "Hydromorphone",
+        "type": "infusion",
+        "time": 10.2,
+        "rate": 0.5,
+        "duration": 5,
+        "isInfinite": false
+      }
+    ]
+  },
+  {
+    "drug": "Morphine",
+    "model": "Mazoit (2007) Adult",
+    "patient": {
+      "age": 18,
+      "weight": 35,
+      "height": 150,
+      "gender": "female"
+    },
+    "params": {
+      "V1": 5,
+      "V2": 11.5,
+      "V3": 69,
+      "Cl": 0.7,
+      "Q2": 0.3,
+      "Q3": 0.1,
+      "ke0": 0.005
+    },
+    "duration": 30.5,
+    "events": [
+      {
+        "id": "a",
+        "drug": "Morphine",
+        "type": "bolus",
+        "time": 0,
+        "amount": 5
+      },
+      {
+        "id": "b",
+        "drug": "Morphine",
+        "type": "infusion",
+        "time": 2.5,
+        "rate": 10,
+        "duration": 10.25,
+        "isInfinite": false
+      },
+      {
+        "id": "c",
+        "drug": "Morphine",
+        "type": "bolus",
+        "time": 8.1,
+        "amount": 2.5
+      },
+      {
+        "id": "d",
+        "drug": "Morphine",
+        "type": "infusion",
+        "time": 10.2,
+        "rate": 5,
+        "duration": 5,
+        "isInfinite": false
+      }
+    ]
+  },
+  {
+    "drug": "Morphine",
+    "model": "Mazoit (2007) Adult",
+    "patient": {
+      "age": 35,
+      "weight": 70,
+      "height": 170,
+      "gender": "male"
+    },
+    "params": {
+      "V1": 10,
+      "V2": 23,
+      "V3": 138,
+      "Cl": 1.4,
+      "Q2": 0.6,
+      "Q3": 0.2,
+      "ke0": 0.005
+    },
+    "duration": 30.5,
+    "events": [
+      {
+        "id": "a",
+        "drug": "Morphine",
+        "type": "bolus",
+        "time": 0,
+        "amount": 5
+      },
+      {
+        "id": "b",
+        "drug": "Morphine",
+        "type": "infusion",
+        "time": 2.5,
+        "rate": 10,
+        "duration": 10.25,
+        "isInfinite": false
+      },
+      {
+        "id": "c",
+        "drug": "Morphine",
+        "type": "bolus",
+        "time": 8.1,
+        "amount": 2.5
+      },
+      {
+        "id": "d",
+        "drug": "Morphine",
+        "type": "infusion",
+        "time": 10.2,
+        "rate": 5,
+        "duration": 5,
+        "isInfinite": false
+      }
+    ]
+  },
+  {
+    "drug": "Morphine",
+    "model": "Mazoit (2007) Adult",
+    "patient": {
+      "age": 80,
+      "weight": 100,
+      "height": 180,
+      "gender": "female"
+    },
+    "params": {
+      "V1": 14.285714285714286,
+      "V2": 32.85714285714286,
+      "V3": 197.14285714285714,
+      "Cl": 2,
+      "Q2": 0.8571428571428571,
+      "Q3": 0.28571428571428575,
+      "ke0": 0.005
+    },
+    "duration": 30.5,
+    "events": [
+      {
+        "id": "a",
+        "drug": "Morphine",
+        "type": "bolus",
+        "time": 0,
+        "amount": 5
+      },
+      {
+        "id": "b",
+        "drug": "Morphine",
+        "type": "infusion",
+        "time": 2.5,
+        "rate": 10,
+        "duration": 10.25,
+        "isInfinite": false
+      },
+      {
+        "id": "c",
+        "drug": "Morphine",
+        "type": "bolus",
+        "time": 8.1,
+        "amount": 2.5
+      },
+      {
+        "id": "d",
+        "drug": "Morphine",
+        "type": "infusion",
+        "time": 10.2,
+        "rate": 5,
+        "duration": 5,
+        "isInfinite": false
+      }
+    ]
+  },
+  {
+    "drug": "Propofol",
+    "model": "Eleveld (2018) General-purpose",
+    "patient": {
+      "age": 18,
+      "weight": 35,
+      "height": 150,
+      "gender": "female"
+    },
+    "params": {
+      "V1": 4.742040816326531,
+      "V2": 16.622069022559497,
+      "V3": 102.31067274588695,
+      "Cl": 1.186012641325229,
+      "Q2": 1.3774817482269235,
+      "Q3": 0.5151431099390004,
+      "ke0": 0.17362423879039726
+    },
+    "duration": 30.5,
+    "events": [
+      {
+        "id": "a",
+        "drug": "Propofol",
+        "type": "bolus",
+        "time": 0,
+        "amount": 100
+      },
+      {
+        "id": "b",
+        "drug": "Propofol",
+        "type": "infusion",
+        "time": 2.5,
+        "rate": 200,
+        "duration": 10.25,
+        "isInfinite": false
+      },
+      {
+        "id": "c",
+        "drug": "Propofol",
+        "type": "bolus",
+        "time": 8.1,
+        "amount": 50
+      },
+      {
+        "id": "d",
+        "drug": "Propofol",
+        "type": "infusion",
+        "time": 10.2,
+        "rate": 100,
+        "duration": 5,
+        "isInfinite": false
+      }
+    ]
+  },
+  {
+    "drug": "Propofol",
+    "model": "Eleveld (2018) General-purpose",
+    "patient": {
+      "age": 35,
+      "weight": 70,
+      "height": 170,
+      "gender": "male"
+    },
+    "params": {
+      "V1": 6.28,
+      "V2": 25.5,
+      "V3": 168.42184178097844,
+      "Cl": 1.6194970204845642,
+      "Q2": 1.8305800445988694,
+      "Q3": 0.7726802340975718,
+      "ke0": 0.146
+    },
+    "duration": 30.5,
+    "events": [
+      {
+        "id": "a",
+        "drug": "Propofol",
+        "type": "bolus",
+        "time": 0,
+        "amount": 100
+      },
+      {
+        "id": "b",
+        "drug": "Propofol",
+        "type": "infusion",
+        "time": 2.5,
+        "rate": 200,
+        "duration": 10.25,
+        "isInfinite": false
+      },
+      {
+        "id": "c",
+        "drug": "Propofol",
+        "type": "bolus",
+        "time": 8.1,
+        "amount": 50
+      },
+      {
+        "id": "d",
+        "drug": "Propofol",
+        "type": "infusion",
+        "time": 10.2,
+        "rate": 100,
+        "duration": 5,
+        "isInfinite": false
+      }
+    ]
+  },
+  {
+    "drug": "Propofol",
+    "model": "Eleveld (2018) General-purpose",
+    "patient": {
+      "age": 80,
+      "weight": 100,
+      "height": 180,
+      "gender": "female"
+    },
+    "params": {
+      "V1": 6.95688622754491,
+      "V2": 18.053749578803732,
+      "V3": 94.02337195080113,
+      "Cl": 2.182876609664746,
+      "Q2": 1.3787961697849247,
+      "Q3": 0.5090774629819216,
+      "ke0": 0.13354491800738938
+    },
+    "duration": 30.5,
+    "events": [
+      {
+        "id": "a",
+        "drug": "Propofol",
+        "type": "bolus",
+        "time": 0,
+        "amount": 100
+      },
+      {
+        "id": "b",
+        "drug": "Propofol",
+        "type": "infusion",
+        "time": 2.5,
+        "rate": 200,
+        "duration": 10.25,
+        "isInfinite": false
+      },
+      {
+        "id": "c",
+        "drug": "Propofol",
+        "type": "bolus",
+        "time": 8.1,
+        "amount": 50
+      },
+      {
+        "id": "d",
+        "drug": "Propofol",
+        "type": "infusion",
+        "time": 10.2,
+        "rate": 100,
+        "duration": 5,
+        "isInfinite": false
+      }
+    ]
+  }
+]

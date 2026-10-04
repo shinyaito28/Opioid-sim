@@ -5,6 +5,9 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { Syringe, Clock, Settings, User, Activity, Plus, Trash2, Save, X, Eye, EyeOff, ZoomIn, Baby, Edit2, AlertCircle, Wand2, Info, FileText, Layers, FolderOpen, Download, MousePointerClick, RotateCcw } from 'lucide-react';
 import TopBar from './components/TopBar';
 import QuickEntry from './components/QuickEntry';
+import InfusionPanel from './components/InfusionPanel';
+import DoseHistory from './components/DoseHistory';
+import { classifyEntry, startInfusion, applyInfusionAction, eventsForCalculation } from './lib/workflow';
 import ChartEventPopover from './components/ChartEventPopover';
 import TherapeuticReferenceModal from './components/TherapeuticReferenceModal';
 import SummaryCard from './components/SummaryCard';
@@ -28,6 +31,12 @@ import { simulateConcentration, processEvents } from './lib/simulation';
 import { computeBurdenAUC } from './lib/burden';
 import { computeAlerts } from './lib/alerts';
 import { useDarkMode } from './hooks/useDarkMode';
+import { validatePatient, validateEvent, validateDuration, finite, newEventId, isValidPatient } from './lib/validation';
+import { clockToMinutes, elapsedMinutes, localDate } from './lib/clock';
+import { summarize } from './lib/metrics';
+import { validateSnapshot, replaceEvent, CALCULATION_VERSION } from './lib/state';
+import { scheduleEvent, removeScheduledEvent, preserveEnteredStop } from './lib/schedule';
+import { infusionDisplay, infusionText } from './lib/display';
 
 
 /**
@@ -43,7 +52,7 @@ import { useDarkMode } from './hooks/useDarkMode';
 
 // Custom Recharts tooltip — keeps default Cp/Ce values, then lists any dosing events at/near the hover time.
 // Multi-drug: each event is labelled with its own drug short name + per-drug unit (read from evt.drug).
-const ChartTooltip = ({ active, payload, label, events, isClockMode, startTime, timeZeroMinute = 0 }) => {
+const ChartTooltip = ({ active, payload, label, events, isClockMode, startTime, timeZeroMinute = 0, displayDivisor = 1, patient, t }) => {
   if (!active || !payload || payload.length === 0) return null;
   const time = Number(label);
   const relMin = time - timeZeroMinute;
@@ -68,7 +77,7 @@ const ChartTooltip = ({ active, payload, label, events, isClockMode, startTime, 
       {payload.map((entry, idx) => (
         <div key={idx} className="flex justify-between gap-3" style={{ color: entry.color }}>
           <span>{entry.name}</span>
-          <span className="font-mono font-bold">{entry.value?.toFixed?.(2) ?? entry.value}</span>
+          <span className="font-mono font-bold">{(Number(entry.value) / (entry.dataKey === 'burden' ? 1 : displayDivisor)).toFixed(2)}</span>
         </div>
       ))}
       {nearbyEvents.length > 0 && (
@@ -81,17 +90,15 @@ const ChartTooltip = ({ active, payload, label, events, isClockMode, startTime, 
             if (e.type === 'bolus') {
               return (
                 <div key={e.id} className="text-[10px] text-purple-700">
-                  <span className="font-bold">▼</span> {evtShort} {e.amount}{evtUnit} @{evtTimeLabel}
+                  <span className="font-bold">▼</span> {e.entryStatus === 'planned' ? t('entryPlanned') : ''} {evtShort} {e.amount}{evtUnit} @{evtTimeLabel}
                 </div>
               );
             }
-            const rateText = e.originalRate && e.originalUnit
-              ? `${e.originalRate} ${e.originalUnit}`
-              : `${e.rate}/hr`;
+            const rateText = infusionText({...e,drug:evtDrug},patient.weight);
             const durLabel = e.isInfinite ? '∞' : `${e.duration}min`;
             return (
               <div key={e.id} className="text-[10px] text-orange-700">
-                <span className="font-bold">▶</span> {evtShort} {rateText} ({durLabel})
+                <span className="font-bold">▶</span> {e.entryStatus === 'planned' ? t('entryPlanned') : ''} {evtShort} {e.seriesLabel} {rateText} ({durLabel})
               </div>
             );
           })}
@@ -136,11 +143,8 @@ const estimateGrowth = (age, gender) => {
  */
 
 
-const timeToMinutes = (timeStr, startStr) => {
-  if (!timeStr || !startStr) return 0;
-  const [h, m] = timeStr.split(':').map(Number);
-  const [sh, sm] = startStr.split(':').map(Number);
-  return (h * 60 + m) - (sh * 60 + sm);
+const timeToMinutes = (value, start, reference = 0) => {
+  try { return clockToMinutes(value, start, reference); } catch { return NaN; }
 };
 
 const minutesToTime = (minutes, startStr) => {
@@ -225,7 +229,11 @@ const App = () => {
   const [patient, setPatient] = useState({
     age: 10, weight: 30, height: 138, gender: 'male'
   });
-  const [autoFillStats, setAutoFillStats] = useState(true);
+  const [autoFillStats, setAutoFillStats] = useState(false);
+  const [inputError, setInputError] = useState(null);
+  const [storageError, setStorageError] = useState(null);
+  const [storageReady, setStorageReady] = useState(false);
+  const restoreRef = useRef(null);
 
   // Phase 5-C: drug is now the *editor* drug (QuickEntry's selected drug); events can mix drugs.
   const [drug, setDrug] = useState('Fentanyl');
@@ -241,6 +249,11 @@ const App = () => {
   const [infusionUnit, setInfusionUnit] = useState(DRUG_UNITS['Fentanyl'][0]);
 
   const [events, setEvents] = useState([]);
+  const [referenceMinute, setReferenceMinute] = useState(0);
+  const [includePlanned, setIncludePlanned] = useState(true);
+  const [quickIntent, setQuickIntent] = useState(null);
+  const [editingEntryStatus, setEditingEntryStatus] = useState('unclassified');
+  const [workflowNotice, setWorkflowNotice] = useState(null);
 
   // Phase 5-H-1: chart-click popover state. Opens at the clicked location and lets the user
   // pick drug / type / dose / time without leaving the chart, then calls quickAddBolus or
@@ -278,6 +291,7 @@ const App = () => {
   // patient/drug/event mutation while a named scenario is loaded.
   const [isModified, setIsModified] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(null);
+  const scenarioBaselineRef = useRef(null);
   // Per-drug last-used amounts/rates so the QuickEntry form pre-fills sensibly when a drug is reselected.
   const [lastDoseByDrug, setLastDoseByDrug] = useState({});
   const [showRanges, setShowRanges] = useState(true);
@@ -288,6 +302,7 @@ const App = () => {
   const [yAxisMode, setYAxisMode] = useState('therapeutic'); // 'full' | 'therapeutic' | 'custom'
   const [isClockMode, setIsClockMode] = useState(false);
   const [startTime, setStartTime] = useState("09:00");
+  const [clockStartDate, setClockStartDate] = useState(localDate);
   // Phase 5-J-2: display-only X-axis origin offset. event.time is unchanged; only
   // tick labels and the tooltip header subtract this. 0 = sim-start origin (default).
   // Mutually exclusive with isClockMode (clock-mode owns absolute time semantics).
@@ -323,82 +338,67 @@ const App = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // --- PERSISTENCE: LOAD ---
+  // Validated restore; an unreadable/invalid save is retained and never overwritten.
+  const restoreState = (d) => {
+    restoreRef.current = { growth: {age:d.patient.age,gender:d.patient.gender,autoFillStats:d.autoFillStats}, models: d.patient.age };
+    setPatient(d.patient); setDrug(d.drug); setModelByDrug(d.modelByDrug);
+    setEvents(d.events); setReferenceMinute(d.entryReferenceTime ?? 0); setIncludePlanned(d.includePlanned ?? true); setSimDuration(d.simDuration); setMaxTimeScale(Math.max(720,d.simDuration));
+    setAutoFillStats(d.autoFillStats); setTherapeuticOverrides(d.therapeuticOverrides);
+    setIsClockMode(d.isClockMode ?? !!d.startTime);
+    setStartTime(d.simSettings?.startTime ?? d.startTime ?? '09:00');
+    setClockStartDate(d.simSettings?.clockStartDate ?? d.clockStartDate ?? localDate());
+    setEditingId(null); setChartPopover(p => ({...p,open:false}));
+    setInputError(null);
+  };
   useEffect(() => {
-    const savedData = localStorage.getItem('opioid_sim_data');
-    if (savedData) {
-      try {
-        const parsed = JSON.parse(savedData);
-        if (parsed.patient) setPatient(parsed.patient);
-        if (parsed.drug) setDrug(parsed.drug);
-
-        // Phase 5-C migration: pre-v2 saves had a single `model` string and untagged events.
-        // Convert to per-drug map and stamp every legacy event with the saved drug.
-        if (parsed.modelByDrug) {
-          setModelByDrug(parsed.modelByDrug);
-        } else if (parsed.model && parsed.drug) {
-          setModelByDrug({ [parsed.drug]: parsed.model });
-        }
-
-        if (parsed.events) {
-          const legacyDrug = parsed.drug || 'Fentanyl';
-          const migrated = parsed.schemaVersion >= 2
-            ? parsed.events
-            : parsed.events.map((e) => ({ ...e, drug: e.drug || legacyDrug }));
-          setEvents(migrated);
-        }
-
-        if (parsed.simDuration) setSimDuration(parsed.simDuration);
-        if (parsed.savedTraces) setSavedTraces(parsed.savedTraces);
-        if (parsed.savedScenarios) setSavedScenarios(parsed.savedScenarios);
-        if (parsed.lastDoseByDrug) setLastDoseByDrug(parsed.lastDoseByDrug);
-        if (parsed.isClockMode !== undefined) setIsClockMode(parsed.isClockMode);
-        if (parsed.simSettings?.startTime) setStartTime(parsed.simSettings.startTime);
-      } catch (e) {
-        console.error("Failed to load saved state", e);
+    try {
+      const raw = localStorage.getItem('opioid_sim_data');
+      if (raw) {
+        const d = validateSnapshot(JSON.parse(raw));
+        restoreState(d);
+        setSavedTraces(d.savedTraces ?? []); setSavedScenarios(d.savedScenarios ?? []);
+        setLastDoseByDrug(d.lastDoseByDrug ?? {});
       }
-    }
+      setStorageReady(true);
+    } catch { setStorageError('savedStateInvalid'); }
   }, []);
 
-  // --- PERSISTENCE: SAVE ---
-  // Phase 5-L-1: also record lastSavedAt so the TopBar auto-save indicator can show
-  // the user that their working state is persisted (it always was — Phase 1 — but
-  // there was no UI signal of that fact).
   useEffect(() => {
+    if (!storageReady || dragStateRef.current?.didDrag) return;
     const dataToSave = {
-      schemaVersion: 2,
-      patient,
-      drug,
-      modelByDrug,
-      events,
-      simDuration,
-      savedTraces,
-      savedScenarios,
-      lastDoseByDrug,
-      isClockMode,
-      simSettings: { startTime }
+      schemaVersion: 4, calculationVersion: CALCULATION_VERSION, entryReferenceTime: referenceMinute, includePlanned,
+      patient, drug, modelByDrug, events, simDuration, autoFillStats, therapeuticOverrides,
+      savedTraces, savedScenarios, lastDoseByDrug, isClockMode,
+      simSettings: { startTime, clockStartDate },
     };
-    localStorage.setItem('opioid_sim_data', JSON.stringify(dataToSave));
-    setLastSavedAt(Date.now());
-  }, [patient, drug, modelByDrug, events, simDuration, savedTraces, savedScenarios, lastDoseByDrug, isClockMode, startTime]);
+    try {
+      validateSnapshot(dataToSave);
+      localStorage.setItem('opioid_sim_data', JSON.stringify(dataToSave));
+      setLastSavedAt(Date.now()); setStorageError(null);
+    } catch { setStorageError('saveFailed'); }
+  }, [storageReady, patient, drug, modelByDrug, events, simDuration, autoFillStats, therapeuticOverrides,
+      savedTraces, savedScenarios, lastDoseByDrug, isClockMode, startTime, clockStartDate, referenceMinute, includePlanned]);
 
   // Phase 5-L-1: dirty-flag tracking against the currently-loaded named scenario.
   // Any patient/drug/event/model/duration change after a load marks the scenario as
   // modified; saveScenario(currentScenarioId) and loadScenario both clear the flag.
   useEffect(() => {
     if (currentScenarioId != null) {
-      setIsModified(true);
+      setIsModified(JSON.stringify({patient,drug,modelByDrug,events,simDuration,autoFillStats,
+        therapeuticOverrides,isClockMode,startTime,clockStartDate,entryReferenceTime:referenceMinute,includePlanned}) !== scenarioBaselineRef.current);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patient, drug, modelByDrug, events, simDuration]);
+  }, [patient, drug, modelByDrug, events, simDuration, autoFillStats, therapeuticOverrides, isClockMode, startTime, clockStartDate, referenceMinute, includePlanned]);
 
   const [editingId, setEditingId] = useState(null);
+  const calculationEvents = useMemo(() => eventsForCalculation(events,includePlanned),[events,includePlanned]);
+  useEffect(() => { if (editingId) requestAnimationFrame(() => document.querySelector('[data-testid="advanced-controls"]')?.scrollIntoView({block:"start",behavior:"smooth"})); },[editingId]);
 
   // Phase 5-C derived state — multi-drug simulation hub.
   // activeDrugs: union of every drug currently represented by an event. Drives chart line iteration.
   const activeDrugs = useMemo(
-    () => new Set(events.map((e) => e.drug || drug)),
-    [events, drug]
+    () => new Set(calculationEvents.map((e) => e.drug || drug)),
+    [calculationEvents, drug]
   );
 
   // Phase 5-G-2-a: split activeDrugs by class.
@@ -458,24 +458,28 @@ const App = () => {
 
   // Per-drug 3-comp + Ce simulation. Includes the editor drug so the model-params display + summary
   // metrics work even before any event is added.
-  const simByDrug = useMemo(() => {
+  const simulation = useMemo(() => {
     const result = new Map();
-    const drugsToSim = new Set(activeDrugs);
-    drugsToSim.add(drug);
-    for (const d of drugsToSim) {
-      const drugEvents = events.filter((e) => (e.drug || drug) === d);
-      const drugModel = modelByDrug[d] || getBestModel(d, patient.age);
-      const params = getPKParameters(d, drugModel, patient);
-      const proc = processEvents(drugEvents, simDuration);
-      const sim = simulateConcentration(proc, params, simDuration, d);
-      result.set(d, sim);
-    }
-    return result;
-  }, [events, modelByDrug, patient, simDuration, drug, activeDrugs]);
+    try {
+      validatePatient(patient); validateDuration(simDuration);
+      const drugsToSim = new Set([...activeDrugs, drug]);
+      for (const d of drugsToSim) {
+        const drugEvents = calculationEvents.filter(e => (e.drug || drug) === d);
+        const drugModel = modelByDrug[d] || getBestModel(d, patient.age);
+        result.set(d, simulateConcentration(processEvents(drugEvents, simDuration),
+          getPKParameters(d, drugModel, patient), simDuration, d));
+      }
+      return { data: result, error: null };
+    } catch { return { data: new Map(), error: 'calculationInvalid' }; }
+  }, [calculationEvents, modelByDrug, patient, simDuration, drug, activeDrugs]);
+  const simByDrug = simulation.data;
+  const visibleTraces = savedTraces.filter(trace => trace.calculationVersion === CALCULATION_VERSION &&
+    plotDrugs.includes(trace.drug) && Array.isArray(trace.data) && trace.data.every(p =>
+      Number.isFinite(p.time) && Number.isFinite(p.cp) && (p.ce === null || Number.isFinite(p.ce))));
 
   // Backwards-compat aliases — many existing useMemos / chart props read these names.
   const parameters = useMemo(
-    () => getPKParameters(drug, model, patient),
+    () => { try { return getPKParameters(drug, model, patient); } catch { return null; } },
     [drug, model, patient]
   );
   const simData = simByDrug.get(drug) || [];
@@ -491,8 +495,9 @@ const App = () => {
   // Evidence base: Dahan 2004 (PMID:15505457) used γ ≈ 1 for hypercapnic/hypoxic
   // respiration; the additive-R form is standard μ-opioid competitive binding.
   const burdenSeries = useMemo(() => {
-    if (activeDrugs.size === 0) return [];
-    const len = simDuration + 1;
+    if (activeDrugs.size === 0 || simulation.error) return [];
+    const sampleTimes = (simByDrug.values().next().value || []).map(p => p.time);
+    const len = sampleTimes.length;
     const result = [];
     for (let t = 0; t < len; t++) {
       let R = 0;
@@ -505,7 +510,7 @@ const App = () => {
         R += (point.ce || 0) / respRisk;
       }
       const depression = R / (1 + R);
-      result.push({ time: t, burden: parseFloat(depression.toFixed(3)) });
+      result.push({ time: sampleTimes[t], burden: parseFloat(depression.toFixed(3)) });
     }
     return result;
   }, [simByDrug, activeDrugs, simDuration]);
@@ -534,6 +539,7 @@ const App = () => {
   // ClinicalAlerts component renders as colour-coded cards under the summary.
   const clinicalAlerts = useMemo(() => {
     // Per-drug effective ranges = literature defaults + user overrides.
+    if (simulation.error) return [];
     const ranges = {};
     for (const d of activeOpioids) {
       ranges[d] = { ...THERAPEUTIC_RANGES[d], ...(therapeuticOverrides[d] || {}) };
@@ -541,11 +547,11 @@ const App = () => {
     return computeAlerts({
       simByDrug,
       ranges,
-      events,
+      events: calculationEvents,
       activeOpioids: [...activeOpioids],
       simDuration,
     });
-  }, [simByDrug, activeOpioids, therapeuticOverrides, events, simDuration]);
+  }, [simByDrug, activeOpioids, therapeuticOverrides, calculationEvents, simDuration]);
 
   const activeParams = useMemo(() => getModelRequirements(drug, model), [drug, model]);
 
@@ -566,20 +572,13 @@ const App = () => {
   // --- REAL-TIME CALCULATION ---
   const currentSimMinutes = useMemo(() => {
     if (!isClockMode) return null;
-    const now = currentTime;
-    const [startH, startM] = startTime.split(':').map(Number);
-    const start = new Date(now);
-    start.setHours(startH, startM, 0, 0);
+    try { return elapsedMinutes(currentTime, clockStartDate, startTime); } catch { return null; }
+  }, [currentTime, clockStartDate, startTime, isClockMode]);
 
-    // If start time is in future relative to now (e.g. set 09:00 when it's 08:00), 
-    // usually implies previous day, but for sim simplicity we just take diff.
-    // If diff is negative, it means we are before start time.
-    const diffMs = now - start;
-    return Math.floor(diffMs / 60000);
-  }, [currentTime, startTime, isClockMode]);
+  const entryReference = isClockMode ? currentSimMinutes ?? 0 : referenceMinute;
 
   const currentValues = useMemo(() => {
-    if (currentSimMinutes === null || simData.length === 0) return null;
+    if (currentSimMinutes === null || currentSimMinutes < 0 || currentSimMinutes > simDuration || simData.length === 0) return null;
     // Find closest data point
     const point = simData.find(d => d.time >= currentSimMinutes);
     return point || null;
@@ -590,77 +589,15 @@ const App = () => {
   // For sedatives (Propofol): onset = time to Ce ≥ bisTarget.min; deepCount = minutes Ce ≥ bisTarget.max.
   // Cp/Ce values are in internal ng/mL — chart UI applies DRUG_DISPLAY[drug].divisor at render time.
   const summaryMetrics = useMemo(() => {
-    if (!simData || simData.length === 0) return null;
-    const range = THERAPEUTIC_RANGES[drug];
-    if (!range) return null;
-
-    // Resolve which thresholds apply for the current drug.
-    const onsetThreshold = range.analgesiaMin ?? range.bisTarget?.min;
-    const respRiskThreshold = range.respiratoryRisk ?? range.bisTarget?.max;
-    const recoveryThreshold = range.analgesiaMin ?? range.bisTarget?.min;
-
-    // Internal Ce/Cp are in ng/mL; sedatives need to be displayed in mcg/mL.
-    // Multiply the threshold values by the inverse of the divisor to compare in same units.
-    // bisTarget for Propofol is given in mcg/mL → multiply by 1000 to compare with ng/mL ce values.
-    const isSedative = !!range.bisTarget;
-    const thresholdScale = isSedative ? (DRUG_DISPLAY[drug]?.divisor || 1) : 1;
-    const onsetThresholdInternal = onsetThreshold != null ? onsetThreshold * thresholdScale : null;
-    const respRiskThresholdInternal = respRiskThreshold != null ? respRiskThreshold * thresholdScale : null;
-    const recoveryThresholdInternal = recoveryThreshold != null ? recoveryThreshold * thresholdScale : null;
-
-    let peakCe = { value: 0, time: 0 };
-    let peakCp = { value: 0, time: 0 };
-    let onsetTime = null;
-    let respRiskCount = 0;
-
-    simData.forEach(d => {
-      if (d.ce > peakCe.value) peakCe = { value: d.ce, time: d.time };
-      if (d.cp > peakCp.value) peakCp = { value: d.cp, time: d.time };
-      if (onsetTime === null && onsetThresholdInternal != null && d.ce >= onsetThresholdInternal) onsetTime = d.time;
-      if (respRiskThresholdInternal != null && d.ce >= respRiskThresholdInternal) respRiskCount++;
-    });
-
-    // Total dose: sum bolus + integrate infusion
-    let totalDose = 0;
-    events.forEach(evt => {
-      if ((evt.drug || drug) !== drug) return; // only count current-drug events
-      if (evt.type === 'bolus') {
-        totalDose += evt.amount;
-      } else if (evt.type === 'infusion') {
-        let effDuration = evt.duration;
-        if (evt.isInfinite) effDuration = Math.max(0, simDuration - evt.time);
-        totalDose += evt.rate * (effDuration / 60);
-      }
-    });
-
-    // Recovery: after the last terminating infusion stops, when ce drops below threshold
-    let recoveryTime = null;
-    const finiteInfusions = events.filter(e => (e.drug || drug) === drug && e.type === 'infusion' && !e.isInfinite);
-    if (finiteInfusions.length > 0 && recoveryThresholdInternal != null) {
-      const lastStop = Math.max(...finiteInfusions.map(e => e.time + e.duration));
-      const recPoint = simData.find(d => d.time >= lastStop && d.ce < recoveryThresholdInternal);
-      if (recPoint) recoveryTime = recPoint.time - lastStop;
-    }
-
-    return {
-      peakCe,
-      peakCp,
-      onsetTime,
-      respRiskMin: respRiskCount,
-      totalDose,
-      recoveryTime,
-      drugUnit: CLINICAL_DEFAULTS[drug]?.unit || 'mcg',
-      isSedative,
-      onsetThreshold,        // in display units (ng/mL or mcg/mL)
-      respRiskThreshold,     // in display units
-      displayUnit: DRUG_DISPLAY[drug]?.unit || 'ng/mL',
-      displayDivisor: DRUG_DISPLAY[drug]?.divisor || 1,
-    };
-  }, [simData, events, drug, simDuration]);
+    if (!simData.length) return null;
+    return summarize(simData, calculationEvents, drug, simDuration,
+      {...THERAPEUTIC_RANGES[drug], ...(therapeuticOverrides[drug] || {})},
+      DRUG_DISPLAY[drug] || {unit:'ng/mL',divisor:1}, getDoseUnitForDrug(drug));
+  }, [simData, calculationEvents, drug, simDuration, therapeuticOverrides]);
 
   // --- EFFECT: Sync Dose Time with Real Time in Clock Mode ---
   useEffect(() => {
-    if (isClockMode && currentSimMinutes !== null) {
+    if (isClockMode && currentSimMinutes !== null && !editingId) {
       // NOTE: User requested "One tap" setting, so auto-sync might be annoying if they want to enter past data.
       // But the original code was auto-syncing. I will keep it BUT only if editing NEW event?
       // Actually, let's keep the hook but rely on the new "NOW" button for manual control which is more explicit.
@@ -678,38 +615,42 @@ const App = () => {
       setBolusTime(prev => shouldUpdate(prev) ? currentSimMinutes : prev);
       setInfusionStartTime(prev => shouldUpdate(prev) ? currentSimMinutes : prev);
     }
-  }, [currentSimMinutes, isClockMode]);
+  }, [currentSimMinutes, isClockMode, editingId]);
 
   // --- EFFECT: Auto-Fill Stats on Age Change ---
   useEffect(() => {
-    if (autoFillStats) {
+    if (restoreRef.current?.growth) {
+      const target = restoreRef.current.growth;
+      if (target.age === patient.age && target.gender === patient.gender && target.autoFillStats === autoFillStats) restoreRef.current.growth = null;
+      return;
+    }
+    if (autoFillStats && Number.isFinite(patient.age) && patient.age >= 0) {
       const { height, weight } = estimateGrowth(patient.age, patient.gender);
       setPatient(prev => ({ ...prev, height, weight }));
     }
   }, [patient.age, patient.gender, autoFillStats]);
 
-  // --- EFFECT: Handle Drug/Age Change & Auto-Select Best Model ---
+  // Restore exact saved choices. On a subsequent age-group change, update all stored models.
+  const previousAgeGroup = useRef(patient.age < 1 ? 'neonate' : patient.age < 12 ? 'child' : 'adult');
   useEffect(() => {
-    const bestModel = getBestModel(drug, patient.age);
-    const currentModelIsForCurrentDrug = AVAILABLE_MODELS[drug].includes(model);
-
-    const isPeds = patient.age < 12;
-    const currentModelIsPeds = model.includes('Pediatric');
-    const currentModelIsAdult = model.includes('Adult');
-
-    if (!currentModelIsForCurrentDrug || (isPeds && currentModelIsAdult) || (!isPeds && currentModelIsPeds)) {
-      setModel(bestModel);
+    const group = patient.age < 1 ? 'neonate' : patient.age < 12 ? 'child' : 'adult';
+    if (restoreRef.current?.models != null) {
+      if (restoreRef.current.models === patient.age) { restoreRef.current.models = null; previousAgeGroup.current = group; }
+      return;
     }
-
-  }, [drug, patient.age]);
+    if (group !== previousAgeGroup.current) {
+      setModelByDrug(prev => Object.fromEntries(Object.keys(prev).map(d => [d,getBestModel(d,patient.age)])));
+      previousAgeGroup.current = group;
+    }
+  }, [patient.age]);
 
   // --- EFFECT: Auto-Fill Bolus on Weight/Drug Change ---
   useEffect(() => {
-    if (autoFillStats) {
+    if (autoFillStats && !editingId) {
       const newBolus = estimateBolus(drug, patient.weight);
       setBolusAmount(newBolus);
     }
-  }, [drug, patient.weight, autoFillStats]);
+  }, [drug, patient.weight, autoFillStats, editingId]);
 
   // MOVED DRUG DEFAULT LOGIC TO handleDrugChange TO ENABLE PERSISTENCE
 
@@ -724,20 +665,21 @@ const App = () => {
   const yAxisInfo = useMemo(() => {
     let dataPeak = 0;
     let peakTime = 0;
-    for (const sim of simByDrug.values()) {
+    for (const d of plotDrugs) {
+      const sim = simByDrug.get(d) || [];
       if (sim.length === 0) continue;
       for (const point of sim) {
-        if ((point.ce ?? 0) > dataPeak) {
-          dataPeak = point.ce;
+        if (Math.max(point.cp ?? 0, point.ce ?? 0) > dataPeak) {
+          dataPeak = Math.max(point.cp ?? 0, point.ce ?? 0);
           peakTime = point.time;
         }
       }
     }
-    savedTraces.forEach((trace) => {
+    visibleTraces.forEach((trace) => {
       if (!trace.data?.length) return;
       for (const point of trace.data) {
-        if ((point.ce ?? 0) > dataPeak) {
-          dataPeak = point.ce;
+        if (Math.max(point.cp ?? 0, point.ce ?? 0) > dataPeak) {
+          dataPeak = Math.max(point.cp ?? 0, point.ce ?? 0);
           peakTime = point.time;
         }
       }
@@ -746,7 +688,7 @@ const App = () => {
     // Phase 5-M: range now follows the chartClass's primary drug so that switching
     // mode flips the therapeutic anchor (analgesiaMin/Max ↔ bisTarget/sedationBands)
     // without the user touching the drug select.
-    const range = THERAPEUTIC_RANGES[primaryDrugForChart];
+    const range = {...THERAPEUTIC_RANGES[primaryDrugForChart], ...(therapeuticOverrides[primaryDrugForChart] || {})};
     let calculatedYMaxLocal;
     if (yAxisMode === 'custom') {
       calculatedYMaxLocal = yAxisMax;
@@ -763,207 +705,85 @@ const App = () => {
       calculatedYMaxLocal = dataPeak <= 0 ? 5 : Math.ceil(dataPeak * 1.2);
     }
     return { calculatedYMax: calculatedYMaxLocal, dataPeak, peakTime };
-  }, [yAxisMode, yAxisMax, primaryDrugForChart, simByDrug, savedTraces]);
+  }, [yAxisMode, yAxisMax, primaryDrugForChart, simByDrug, savedTraces, chartClass, therapeuticOverrides]);
 
   const calculatedYMax = yAxisInfo.calculatedYMax;
 
 
   // --- HANDLERS ---
-  const addBolus = () => {
-    let newTime = parseFloat(bolusTime);
-    let currentEvents = [...events];
-
-    if (isClockMode && newTime < 0) {
-      const offset = -newTime;
-      // Shift start time back
-      const [sh, sm] = startTime.split(':').map(Number);
-      let totalStartMin = sh * 60 + sm - offset;
-      if (totalStartMin < 0) totalStartMin += 24 * 60;
-
-      const newH = Math.floor(totalStartMin / 60);
-      const newM = totalStartMin % 60;
-      setStartTime(`${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`);
-
-      // Shift existing events forward
-      currentEvents = currentEvents.map(e => ({
-        ...e,
-        time: e.time + offset
-      }));
-
-      newTime = 0; // The new event is now at 0
-    }
-
-    setEvents([...currentEvents, { id: Date.now(), drug, type: 'bolus', time: newTime, amount: parseFloat(bolusAmount) }]);
+  const guarded = (action) => {
+    try { action(); setInputError(null); return true; }
+    catch (error) { setInputError(({AMBIGUOUS_INFUSION:'infusionSeriesRequired',FUTURE_ADMINISTERED:'entryFutureOnly',DRAFT_STALE:'entryDraftStale'})[error.code] || 'invalidInput'); return false; }
+  };
+  const commitEvent = (event, rateChange = false) => {
+    validatePatient(patient);
+    if (!DRUG_UNITS[event.drug]) throw new RangeError('Unknown drug');
+    const old = events.find(e => e.id === event.id);
+    if (!old && !event.entryStatus) event = classifyEntry(event,event.time > entryReference ? 'planned' : 'administered',entryReference);
+    else if (event.entryStatus === 'administered' && event.time > entryReference) { event = {...event,entryStatus:'planned'}; setWorkflowNotice('entryMovedToPlan'); }
+    const next = scheduleEvent(events, event, rateChange);
+    next.forEach(validateEvent); setEvents(next);
+  };
+  const addBolus = () => guarded(() => {
+    const id = editingId?.type === 'bolus' ? editingId.id : newEventId();
+    const old = events.find(e => e.id === id);
+    let event = {...old,id,drug,type:'bolus',time:Number(bolusTime),amount:Number(bolusAmount)};
+    if (editingId && editingEntryStatus !== 'unclassified') event = classifyEntry(event,editingEntryStatus,entryReference);
+    else if (editingId) delete event.entryStatus;
+    commitEvent(event);
     setEditingId(null);
-  };
-
-  // Phase 5-M-2: when a new infusion of the same drug is scheduled, the clinical
-  // mental model is "I'm changing the rate", not "I'm running two parallel
-  // infusions". So any same-drug infusion that's still active at the new start
-  // time is truncated to end exactly at the new event's start.
-  //
-  // This only touches same-drug overlap. Concurrent infusions of *different*
-  // drugs remain independently summed by the simulation engine (Phase 5-C
-  // bugfix is preserved).
-  const truncateOverlappingInfusions = (eventsList, drugArg, newStartTime) => {
-    return eventsList
-      .map((e) => {
-        if (e.drug !== drugArg || e.type !== 'infusion') return e;
-        if (e.time >= newStartTime) return e; // future / same-time entries left to the caller
-        const oldEnd = e.isInfinite ? Infinity : e.time + e.duration;
-        if (oldEnd <= newStartTime) return e; // already finished naturally
-        return {
-          ...e,
-          duration: newStartTime - e.time,
-          isInfinite: false,
-        };
-      })
-      // Drop zero/negative-duration leftovers defensively (shouldn't happen,
-      // but a malformed override is better deleted than rendered).
-      .filter((e) => !(e.drug === drugArg && e.type === 'infusion' && e.duration <= 0));
-  };
-
-  const addInfusion = () => {
-    let newStartTime = parseFloat(infusionStartTime);
-    let currentEvents = [...events];
-
-    if (isClockMode && newStartTime < 0) {
-      const offset = -newStartTime;
-      // Shift start time back
-      const [sh, sm] = startTime.split(':').map(Number);
-      let totalStartMin = sh * 60 + sm - offset;
-      if (totalStartMin < 0) totalStartMin += 24 * 60;
-
-      const newH = Math.floor(totalStartMin / 60);
-      const newM = totalStartMin % 60;
-      setStartTime(`${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`);
-
-      // Shift existing events forward
-      currentEvents = currentEvents.map(e => ({
-        ...e,
-        time: e.time + offset
-      }));
-
-      newStartTime = 0; // The new event starts at 0
+  });
+  const makeInfusion = (id,d,rate,unit,time,duration,infinite,extra = {}) => ({
+    ...extra,id,drug:d,type:'infusion',time,
+    rate:convertToStandardUnit(rate,unit,patient.weight,d),originalRate:rate,originalUnit:unit,
+    duration:infinite ? 60 : duration,isInfinite:infinite,weightAtEntry:patient.weight,
+  });
+  const addInfusion = () => guarded(() => {
+    const editing = editingId?.type === 'infusion';
+    const old = editing ? events.find(e => e.id === editingId.id) : null;
+    const event = makeInfusion(old?.id ?? newEventId(),drug,Number(infusionRate),infusionUnit,
+      Number(infusionStartTime),Number(infusionDuration),isInfiniteDuration,old || {});
+    // Legacy records remain individual; identified series retain entered stop constraints.
+    let entered = preserveEnteredStop(old,event);
+    if (editing && editingEntryStatus !== 'unclassified') entered = classifyEntry(entered,editingEntryStatus,entryReference);
+    else if (editing) delete entered.entryStatus;
+    commitEvent(entered,!editing || !!old?.seriesId); setEditingId(null);
+  });
+  const quickAddBolus = (d,amount,time,options = {}) => guarded(() => {
+    commitEvent(classifyEntry({id:newEventId(),drug:d,type:'bolus',time,amount},options.entryStatus || (time>entryReference?'planned':'administered'),entryReference));
+    setDrug(d); setLastDoseByDrug(prev => ({...prev,[d]:{...prev[d],bolusAmount:amount}}));
+  });
+  const quickAddInfusion = (d,rate,unit,time,duration,infinite,options = {}) => guarded(() => {
+    const event = classifyEntry(makeInfusion(newEventId(),d,rate,unit,time,duration,infinite),options.entryStatus || (time>entryReference?'planned':'administered'),entryReference);
+    if (options.newSeries) { validatePatient(patient); const next = startInfusion(events,event,options.parallel); next.forEach(validateEvent); setEvents(next); }
+    else commitEvent(event,true);
+    setDrug(d); setLastDoseByDrug(prev => ({...prev,[d]:{...prev[d],infusionRate:rate,
+      infusionUnit:unit,infusionDuration:duration,isInfinite:infinite}}));
+  });
+  const handlePumpAction = data => guarded(() => {
+    validatePatient(patient);
+    const event = classifyEntry(makeInfusion(newEventId(),data.drug,data.rate,data.unit,data.minute,data.duration,data.kind==='stop'||data.infinite),data.entryStatus,entryReference);
+    const next = applyInfusionAction(events,data.targetId,data.kind,event,data.revision); next.forEach(validateEvent); setEvents(next); setWorkflowNotice('entryActionSaved');
+  });
+  const requestParallel = d => { handleDrugChange(d); setQuickIntent({drug:d,id:newEventId()}); document.querySelector('[data-testid="quick-entry"]')?.scrollIntoView({block:'start',behavior:'smooth'}); };
+  const handleEntryClockMode = enabled => {
+    if (enabled && !isClockMode && events.length === 0) {
+      setStartTime(`${String(currentTime.getHours()).padStart(2,'0')}:${String(currentTime.getMinutes()).padStart(2,'0')}`);
+      setClockStartDate(localDate(currentTime));
     }
-
-    const standardRate = convertToStandardUnit(parseFloat(infusionRate), infusionUnit, patient.weight, drug);
-
-    // Phase 5-M-2: truncate any same-drug infusion overlapping the new start.
-    currentEvents = truncateOverlappingInfusions(currentEvents, drug, newStartTime);
-
-    setEvents([...currentEvents, {
-      id: Date.now(),
-      drug,
-      type: 'infusion',
-      time: newStartTime,
-      rate: standardRate,
-      originalRate: parseFloat(infusionRate), // Save original input for editing
-      originalUnit: infusionUnit,
-      duration: isInfiniteDuration ? (simDuration - newStartTime + 60) : parseFloat(infusionDuration),
-      isInfinite: isInfiniteDuration
-    }]);
-    setEditingId(null);
+    setIsClockMode(enabled);
   };
-
-  // QuickEntry-only bolus add: takes drug+amount+time directly so it's independent of the
-  // detailed-edit form's bolusAmount/bolusTime state. Handles the same isClockMode backward
-  // shift logic as addBolus, and switches drug if the chip differs from current.
-  const quickAddBolus = (drugArg, amountVal, timeArg) => {
-    if (drugArg !== drug) setDrug(drugArg);
-
-    let newTime = timeArg;
-    let currentEvents = [...events];
-
-    if (isClockMode && newTime < 0) {
-      const offset = -newTime;
-      const [sh, sm] = startTime.split(':').map(Number);
-      let totalStartMin = sh * 60 + sm - offset;
-      if (totalStartMin < 0) totalStartMin += 24 * 60;
-      const newH = Math.floor(totalStartMin / 60);
-      const newM = totalStartMin % 60;
-      setStartTime(`${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`);
-      currentEvents = currentEvents.map((e) => ({ ...e, time: e.time + offset }));
-      newTime = 0;
+  const setEventStatus = (id,status) => guarded(() => { const old = events.find(e => e.id === id); if (!old) throw new RangeError(); commitEvent(classifyEntry(old,status,entryReference)); });
+  const cancelDetail = () => { setEditingId(null); setBolusAmount(0); setInfusionRate(0); };
+  const handleStartTimeChange = (value) => guarded(() => {
+    const delta = clockToMinutes(value,startTime,0);
+    if (isClockMode) {
+      const next = events.map(e => ({...e,time:e.time-delta})); next.forEach(validateEvent);
+      const anchor = new Date(`${clockStartDate}T${startTime}:00`);
+      anchor.setMinutes(anchor.getMinutes()+delta); setClockStartDate(localDate(anchor)); setEvents(next);
     }
-
-    setEvents([...currentEvents, { id: Date.now(), drug: drugArg, type: 'bolus', time: newTime, amount: amountVal }]);
-    setLastDoseByDrug((prev) => ({ ...prev, [drugArg]: { ...prev[drugArg], bolusAmount: amountVal } }));
-    setEditingId(null);
-  };
-
-  const quickAddInfusion = (drugArg, rateVal, unitArg, timeArg, durationVal, infinite) => {
-    if (drugArg !== drug) setDrug(drugArg);
-
-    let newStartTime = timeArg;
-    let currentEvents = [...events];
-
-    if (isClockMode && newStartTime < 0) {
-      const offset = -newStartTime;
-      const [sh, sm] = startTime.split(':').map(Number);
-      let totalStartMin = sh * 60 + sm - offset;
-      if (totalStartMin < 0) totalStartMin += 24 * 60;
-      const newH = Math.floor(totalStartMin / 60);
-      const newM = totalStartMin % 60;
-      setStartTime(`${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`);
-      currentEvents = currentEvents.map((e) => ({ ...e, time: e.time + offset }));
-      newStartTime = 0;
-    }
-
-    const standardRate = convertToStandardUnit(rateVal, unitArg, patient.weight, drugArg);
-    // Phase 5-M-2: truncate any same-drug infusion overlapping the new start.
-    currentEvents = truncateOverlappingInfusions(currentEvents, drugArg, newStartTime);
-    setEvents([
-      ...currentEvents,
-      {
-        id: Date.now(),
-        drug: drugArg,
-        type: 'infusion',
-        time: newStartTime,
-        rate: standardRate,
-        originalRate: rateVal,
-        originalUnit: unitArg,
-        duration: infinite ? Math.max(0, simDuration - newStartTime + 60) : durationVal,
-        isInfinite: infinite,
-      },
-    ]);
-    setLastDoseByDrug((prev) => ({
-      ...prev,
-      [drugArg]: {
-        ...prev[drugArg],
-        infusionRate: rateVal,
-        infusionUnit: unitArg,
-        infusionDuration: durationVal,
-        isInfinite: infinite,
-      },
-    }));
-    setEditingId(null);
-  };
-
-  // Phase 5-H-3 (A): manual startTime change in clock mode preserves each event's absolute
-  // wall-clock time by shifting event.time by the inverse delta. Without this, moving the
-  // chart origin from 10:42 to 11:00 would silently push every drug event 18 min later in
-  // absolute time (the user's original input was at 11:12, not 11:30).
-  const handleStartTimeChange = (newStartTime) => {
-    if (!isClockMode || newStartTime === startTime) {
-      setStartTime(newStartTime);
-      return;
-    }
-    const toMin = (s) => {
-      const [h, m] = s.split(':').map(Number);
-      return h * 60 + m;
-    };
-    const oldMin = toMin(startTime);
-    const newMin = toMin(newStartTime);
-    let delta = oldMin - newMin; // origin moved earlier → +, later → −
-    // 24h wrap: pick the smaller absolute shift (23:00 → 01:00 means "+2h", not "−22h")
-    if (delta > 12 * 60) delta -= 24 * 60;
-    if (delta < -12 * 60) delta += 24 * 60;
-    if (delta !== 0) {
-      setEvents((prev) => prev.map((e) => ({ ...e, time: e.time + delta })));
-    }
-    setStartTime(newStartTime);
-  };
+    setStartTime(value);
+  });
 
   // Phase 5-H-3 (B): find an existing event near a clicked minute on the chart so that the
   // popover can open in edit mode instead of always adding a new event. Drug filter is used
@@ -997,47 +817,25 @@ const App = () => {
   // Update keeps the original id so list ordering and saved-trace identity remain stable.
   // The popover passes raw user-entered values; this handler does the same standard-unit
   // conversion that quickAddInfusion does so the simulation engine sees consistent data.
-  const handleEventUpdate = (oldId, data) => {
-    setEvents((prev) => prev.map((ev) => {
-      if (ev.id !== oldId) return ev;
-      if (data.type === 'bolus') {
-        return { id: oldId, drug: data.drug, type: 'bolus', time: data.time, amount: data.amount };
-      }
-      const standardRate = convertToStandardUnit(data.rate, data.unit, patient.weight, data.drug);
-      return {
-        id: oldId,
-        drug: data.drug,
-        type: 'infusion',
-        time: data.time,
-        rate: standardRate,
-        originalRate: data.rate,
-        originalUnit: data.unit,
-        duration: data.isInfinite ? Math.max(0, simDuration - data.time + 60) : data.duration,
-        isInfinite: data.isInfinite,
-      };
-    }));
-  };
-  const handleEventDelete = (eventId) => {
-    setEvents((prev) => prev.filter((ev) => ev.id !== eventId));
-  };
-
-  // Phase 5-H-4: time-only event update used by drag-to-reschedule. Skips the unit
-  // conversion in handleEventUpdate (rate stays in standard unit) — only the time
-  // changes, so the simulation engine sees an otherwise-identical event.
-  const handleEventTimeChange = (eventId, newTime) => {
-    setEvents((prev) => prev.map((ev) =>
-      ev.id === eventId ? { ...ev, time: newTime } : ev
-    ));
-  };
-
-  // Phase 5-H-7: duration-only event update used by drag-on-end-marker. Same shape
-  // as handleEventTimeChange but writes the duration field. Minimum 1 min so the
-  // event doesn't collapse to a zero-length artifact.
-  const handleEventDurationChange = (eventId, newDuration) => {
-    setEvents((prev) => prev.map((ev) =>
-      ev.id === eventId ? { ...ev, duration: Math.max(1, newDuration) } : ev
-    ));
-  };
+  const handleEventUpdate = (id,data) => guarded(() => {
+    const old = events.find(e => e.id === id); if (!old) throw new RangeError('Missing event');
+    const event = data.type === 'bolus' ? {...old,id,drug:data.drug,type:'bolus',time:data.time,amount:data.amount} :
+      makeInfusion(id,data.drug,data.rate,data.unit,data.time,data.duration,data.isInfinite,old);
+    commitEvent(preserveEnteredStop(old,event),!!old.seriesId && event.drug === old.drug);
+  });
+  const handleEventDelete = id => guarded(() => {
+    const next = removeScheduledEvent(events,id); next.forEach(validateEvent); setEvents(next);
+    if (editingId?.id === id) setEditingId(null);
+  });
+  const handleEventTimeChange = (id,time) => guarded(() => {
+    const old = events.find(e => e.id === id); if (!old) return;
+    commitEvent({...old,time},!!old.seriesId);
+  });
+  const handleEventDurationChange = (id,duration) => guarded(() => {
+    const old = events.find(e => e.id === id); if (!old) return;
+    const event = {...old,duration:Math.max(1,duration)}; delete event.seriesLimit;
+    commitEvent(event,!!old.seriesId);
+  });
 
   // Phase 5-H-4: drag-to-reschedule on the main chart.
   // Pointer Events unify mouse + touch. The chart wrapper claims pointer capture on
@@ -1063,7 +861,7 @@ const App = () => {
     // Phase 5-H-7: end-marker takes priority. Wider tolerance (±2) so the thin ◀
     // is grabbable; if the user is in the middle of a long infusion they fall
     // through to whole-event drag below.
-    const endHit = findInfusionEndNearMinute(events, minute);
+    const endHit = findInfusionEndNearMinute(calculationEvents, minute);
     if (endHit) {
       dragStateRef.current = {
         eventId: endHit.id,
@@ -1072,13 +870,14 @@ const App = () => {
         startMinute: minute,
         originalTime: endHit.time,
         originalDuration: endHit.duration,
+        snapshot: events,
         mode: 'duration',
         didDrag: false,
       };
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
       return;
     }
-    const nearby = findEventNearMinute(events, minute);
+    const nearby = findEventNearMinute(calculationEvents, minute);
     if (!nearby) return;
     dragStateRef.current = {
       eventId: nearby.id,
@@ -1087,6 +886,7 @@ const App = () => {
       startMinute: minute,
       originalTime: nearby.time,
       originalDuration: nearby.duration,
+      snapshot: events,
       mode: 'time',
       didDrag: false,
     };
@@ -1107,14 +907,10 @@ const App = () => {
     const delta = currentMinute - ds.startMinute;
     if (ds.mode === 'duration') {
       const newDuration = Math.max(1, ds.originalDuration + delta);
-      setEvents((prev) => prev.map((ev) =>
-        ev.id === ds.eventId ? { ...ev, duration: newDuration } : ev
-      ));
+      handleEventDurationChange(ds.eventId,newDuration);
     } else {
       const newTime = Math.max(0, Math.min(simDuration, ds.originalTime + delta));
-      setEvents((prev) => prev.map((ev) =>
-        ev.id === ds.eventId ? { ...ev, time: newTime } : ev
-      ));
+      handleEventTimeChange(ds.eventId,newTime);
     }
   };
   const onChartPointerUp = (e) => {
@@ -1123,16 +919,13 @@ const App = () => {
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
     if (ds.didDrag) dragEndTimeRef.current = Date.now();
     dragStateRef.current = null;
+    if (ds.didDrag) setEvents(prev => [...prev]);
   };
   const onChartPointerCancel = (e) => {
     const ds = dragStateRef.current;
     if (!ds || ds.pointerId !== e.pointerId) return;
     if (ds.didDrag) {
-      const revertField = ds.mode === 'duration' ? 'duration' : 'time';
-      const revertValue = ds.mode === 'duration' ? ds.originalDuration : ds.originalTime;
-      setEvents((prev) => prev.map((ev) =>
-        ev.id === ds.eventId ? { ...ev, [revertField]: revertValue } : ev
-      ));
+      setEvents(ds.snapshot);
     }
     dragStateRef.current = null;
   };
@@ -1170,7 +963,7 @@ const App = () => {
       setIsInfiniteDuration(true);
       setInfusionUnit(defaultUnit);
     }
-    setIsAutoY(true);
+    setYAxisMode('therapeutic');
     setEditingId(null);
   };
 
@@ -1178,52 +971,51 @@ const App = () => {
     // If this event belongs to a different drug, switch the editor to it (non-destructively —
     // we don't run handleDrugChange so the form-defaults reset doesn't clobber evt.amount).
     const evtDrug = evt.drug || drug;
+    setEditingEntryStatus(evt.entryStatus || 'unclassified');
     if (evtDrug !== drug) setDrug(evtDrug);
 
-    const remainingEvents = events.filter((e) => e.id !== evt.id);
-    setEvents(remainingEvents);
+    // Preserve the original event until a validated update is committed.
 
     if (evt.type === 'bolus') {
       setBolusAmount(evt.amount);
       setBolusTime(evt.time);
-      setEditingId('bolus');
+      setEditingId({id:evt.id,type:'bolus'});
     } else {
       const drugForUnit = evtDrug;
-      if (evt.originalRate && evt.originalUnit && DRUG_UNITS[drugForUnit]?.includes(evt.originalUnit)) {
-        setInfusionRate(evt.originalRate);
-        setInfusionUnit(evt.originalUnit);
-      } else {
-        setInfusionRate(evt.rate);
-      }
+      try {
+        const display = infusionDisplay({...evt,drug:drugForUnit},patient.weight);
+        setInfusionRate(display.value); setInfusionUnit(display.unit);
+      } catch { setInputError('invalidInput'); return; }
       setInfusionStartTime(evt.time);
       setInfusionDuration(evt.duration);
       setIsInfiniteDuration(!!evt.isInfinite);
-      setEditingId('infusion');
+      setEditingId({id:evt.id,type:'infusion'});
     }
   };
 
   const saveCurrentTrace = () => {
-    const name = `${drug} (${model.split(' ')[0]})`;
+    if (simulation.error || !simData.length) return;
+    const name = `${drug} (${model.split(' ')[0]}) · ${t(includePlanned?'entryScopePlans':'entryScopeActual')}`;
     // Prevent duplicates: Remove existing trace with same name before adding new one
     const prevTraces = savedTraces.filter(t => t.name !== name);
 
     const trace = {
-      id: Date.now(),
+      id: newEventId(),
       name: name,
       data: simData,
       color: getRandomColor(),
-      drug: drug
+      drug: drug, calculationVersion: CALCULATION_VERSION
     };
     setSavedTraces([...prevTraces, trace]);
   };
 
-  const compareAllModels = () => {
+  const compareAllModels = () => guarded(() => {
     const modelsToCompare = AVAILABLE_MODELS[drug];
     const newTraces = [];
 
     // Phase 5-C: filter to current editor drug's events only — multi-drug events shouldn't
     // appear in a "compare all models for current drug" view.
-    const drugEvents = events.filter((e) => (e.drug || drug) === drug);
+    const drugEvents = calculationEvents.filter((e) => (e.drug || drug) === drug);
     const proc = processEvents(drugEvents, simDuration);
 
     modelsToCompare.forEach((m, index) => {
@@ -1234,18 +1026,18 @@ const App = () => {
       const color = colors[index % colors.length];
 
       newTraces.push({
-        id: Date.now() + index,
-        name: `${drug} (${m.split(' ')[0]})`,
+        id: newEventId(),
+        name: `${drug} (${m.split(' ')[0]}) · ${t(includePlanned?'entryScopePlans':'entryScopeActual')}`,
         data: data,
         color: color,
-        drug: drug
+        drug: drug, calculationVersion: CALCULATION_VERSION
       });
     });
 
     // Prevent duplicates: Remove existing traces that are about to be added
     const newNames = new Set(newTraces.map(t => t.name));
     setSavedTraces(prev => [...prev.filter(t => !newNames.has(t.name)), ...newTraces]);
-  };
+  });
 
   const clearTraces = () => setSavedTraces([]);
   const removeTrace = (id) => setSavedTraces(savedTraces.filter(t => t.id !== id));
@@ -1256,17 +1048,16 @@ const App = () => {
   // matching entry is updated in place (timestamp + data); otherwise a new entry is
   // pushed to the head. The newly-saved scenario becomes the "current" one so a
   // subsequent overwrite-save acts on the same row.
-  const saveScenario = (overwriteId = null, customName = null) => {
+  const saveScenario = (overwriteId = null, customName = null) => guarded(() => {
+    scenarioBaselineRef.current = JSON.stringify({patient,drug,modelByDrug,events,simDuration,autoFillStats,
+      therapeuticOverrides,isClockMode,startTime,clockStartDate,entryReferenceTime:referenceMinute,includePlanned});
     const autoName = `${drug} - ${patient.age}y ${patient.gender} (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
-    const data = {
-      patient: { ...patient },
-      drug,
-      model,
-      events: [...events],
-      autoFillStats,
-      simDuration,
-      startTime: isClockMode ? startTime : null,
-    };
+    const data = validateSnapshot({
+      schemaVersion:4,calculationVersion:CALCULATION_VERSION,entryReferenceTime:referenceMinute,includePlanned,
+      patient:{...patient},drug,modelByDrug:{...modelByDrug,[drug]:model},
+      events:structuredClone(events),autoFillStats,simDuration,
+      therapeuticOverrides:structuredClone(therapeuticOverrides),isClockMode,startTime,clockStartDate,
+    });
     if (overwriteId != null) {
       setSavedScenarios(prev => prev.map(s => s.id === overwriteId
         ? { ...s, name: customName ?? s.name, timestamp: Date.now(), data }
@@ -1275,47 +1066,22 @@ const App = () => {
       setIsModified(false);
       return;
     }
-    const id = Date.now();
-    const scenario = { id, name: customName ?? autoName, timestamp: id, data };
+    const id = newEventId();
+    const scenario = { id, name: customName ?? autoName, timestamp: Date.now(), data };
     setSavedScenarios(prev => [scenario, ...prev]);
     setCurrentScenarioId(id);
     setIsModified(false);
-  };
+  });
 
-  const loadScenario = (scenario) => {
-    const d = scenario.data;
-    setPatient(d.patient);
-    setDrug(d.drug);
-    // Timeout to allow drug effect to clear traces first, then set model
-    // However, React batching might handle it. We'll set model directly.
-    // The drug change effect clears traces, which Is desired. 
-    // If the saved scenario was the SAME drug, we might lose traces we wanted to keep? 
-    // User said "temporarily save... even if I change patient/drug".
-    // So restoring should probably restore the exact state.
-    // Setting drug triggers the "clear traces" effect. 
-    // We might want to allow that to happen to simulate a fresh start.
-
-    // We need to ensure model is set AFTER drug change effect might reset it.
-    // But since `model` is a dependency of simulation, setting it here is fine.
-    // The auto-selector in useEffect depends on drug/age. We need to bypass it or ensure it settles.
-    // The current auto-select logic runs on [drug, patient.age].
-    // If we set state here, the effect will run. 
-    // We can just rely on the fact that if the saved model is valid, it will be kept or re-selected.
-    // But to be safe, we might need a small timeout or just accept the auto-select logic might override if invalid.
-    // Assuming saved state was valid:
-    setModel(d.model);
-
-    setEvents(d.events);
-    setAutoFillStats(d.autoFillStats);
-    setSimDuration(d.simDuration);
-    if (d.startTime) {
-      setIsClockMode(true);
-      setStartTime(d.startTime);
-    }
-    // Phase 5-L-1: track that this scenario is now the "current" one for overwrite.
-    setCurrentScenarioId(scenario.id);
-    setIsModified(false);
-  };
+  const loadScenario = scenario => guarded(() => {
+    const d = validateSnapshot(scenario.data);
+    scenarioBaselineRef.current = JSON.stringify({patient:d.patient,drug:d.drug,modelByDrug:d.modelByDrug,
+      events:d.events,simDuration:d.simDuration,autoFillStats:d.autoFillStats,therapeuticOverrides:d.therapeuticOverrides,
+      isClockMode:d.isClockMode ?? !!d.startTime,startTime:d.simSettings?.startTime ?? d.startTime ?? '09:00',
+      clockStartDate:d.simSettings?.clockStartDate ?? d.clockStartDate ?? localDate(),entryReferenceTime:d.entryReferenceTime ?? 0,includePlanned:d.includePlanned ?? true});
+    restoreState(d);
+    setCurrentScenarioId(scenario.id); setIsModified(false);
+  });
 
   const deleteScenario = (id) => {
     setSavedScenarios(prev => prev.filter(s => s.id !== id));
@@ -1392,7 +1158,8 @@ const App = () => {
     },
   ];
 
-  const applyPreset = (preset) => {
+  const applyPreset = (preset) => guarded(() => {
+    validatePatient(patient);
     if (events.length > 0) {
       if (!window.confirm(t('confirmReset'))) return;
     }
@@ -1421,12 +1188,13 @@ const App = () => {
         isInfinite: preset.infusion.isInfinite || false,
       });
     }
+    newEvents.forEach(validateEvent);
     setEvents(newEvents);
     setEditingId(null);
-    setIsAutoY(true);
-  };
+    setYAxisMode('therapeutic');
+  });
 
-  const handleInfusionUnitChange = (newUnit) => {
+  const handleInfusionUnitChange = (newUnit) => guarded(() => {
     // Convert current rate to new unit to maintain same absolute dose
     const currentStd = convertToStandardUnit(parseFloat(infusionRate), infusionUnit, patient.weight, drug);
     const newRateVal = convertFromStandardUnit(currentStd, newUnit, patient.weight, drug);
@@ -1439,9 +1207,9 @@ const App = () => {
     // I will use slightly more precision for conversion (2 sig digits) to keep stability, 
     // unless the value is very round.
     // Let's try 2 significant digits for stability.
-    setInfusionRate(parseFloat(newRateVal.toPrecision(2)));
+    setInfusionRate(parseFloat(newRateVal.toPrecision(12)));
     setInfusionUnit(newUnit);
-  };
+  });
 
   return (
     <div
@@ -1478,13 +1246,29 @@ const App = () => {
         }}
       >
 
+        {(inputError || storageError || simulation.error) && (
+          <div role="alert" className="border border-red-300 bg-red-50 dark:bg-red-900/30 rounded p-3 text-sm text-red-700 dark:text-red-200">
+            {[inputError,storageError,simulation.error].filter(Boolean).map(key => <p key={key}>{t(key)}</p>)}
+          </div>
+        )}
+        {savedTraces.some(trace => trace.calculationVersion !== CALCULATION_VERSION) &&
+          <p className="text-xs text-amber-700 dark:text-amber-300">{t('legacyTracesHidden')}</p>}
+        {(model.includes('Scaled') || (drug === 'Hydromorphone' && model === 'Standard (Adult)')) &&
+          <p className="text-xs text-amber-700 dark:text-amber-300">{t('unsourcedModelNote')}</p>}
+        {(patient.age < 12 && (model.includes('Adult') || model.includes('General-purpose'))) &&
+          <p className="text-xs text-amber-700 dark:text-amber-300">{t('populationLimitNote')}</p>}
+        {THERAPEUTIC_RANGES[drug]?.contextWarningKey &&
+          <p className="text-xs text-amber-700 dark:text-amber-300">{t(THERAPEUTIC_RANGES[drug].contextWarningKey)}</p>}
+        <p className="text-xs text-slate-500">{t('modelLimitNote')}</p>
         <QuickEntry
           drug={drug}
           setDrug={handleDrugChange}
           patient={patient}
           isClockMode={isClockMode}
           startTime={startTime}
+          clockStartDate={clockStartDate} onModeChange={handleEntryClockMode}
           currentSimMinutes={currentSimMinutes}
+          reference={entryReference} referenceMinute={referenceMinute} setReferenceMinute={setReferenceMinute} events={events} quickIntent={quickIntent}
           drugList={Object.keys(DRUG_UNITS)}
           drugUnits={DRUG_UNITS}
           drugShortNames={DRUG_SHORT_NAMES}
@@ -1495,13 +1279,21 @@ const App = () => {
           t={t}
         />
 
+        <InfusionPanel events={events} patient={patient} reference={entryReference} isClockMode={isClockMode} startTime={startTime} onAction={handlePumpAction} onParallel={requestParallel} t={t}/>
+        <DoseHistory events={events} patient={patient} reference={entryReference} isClockMode={isClockMode} startTime={startTime} onEdit={editEvent} onDelete={handleEventDelete} onStatus={setEventStatus} t={t}/>
+        {workflowNotice&&<p role="status" className="text-xs text-blue-600">{t(workflowNotice)}</p>}
+        <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-3 flex flex-wrap justify-between items-center gap-2">
+          <p data-testid="calculation-scope" className="font-semibold text-xs text-amber-900 dark:text-amber-200">{t(includePlanned?'entryScopePlans':'entryScopeActual')} · {t('entryPlanCount',{count:events.filter(e=>e.entryStatus==='planned').length})}</p>
+          <label className="text-xs flex items-center gap-2 text-amber-900 dark:text-amber-200"><input data-testid="include-planned" type="checkbox" checked={includePlanned} onChange={e=>setIncludePlanned(e.target.checked)}/>{t('entryIncludePlans')}</label>
+        </div>
+
         {/* --- MAIN CHART SECTION --- */}
         <div className="bg-white dark:bg-slate-900 p-2 md:p-4 rounded-xl shadow border border-slate-200 dark:border-slate-700">
           <div className="flex flex-wrap justify-between items-center mb-2 gap-x-4 gap-y-2">
             <div>
               <h2 className="font-bold text-slate-700 dark:text-slate-200 text-lg">{t('chartTitle')}</h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                {t('chartLegend')}
+                {t('chartLegend')} · {CALCULATION_VERSION}
               </p>
             </div>
 
@@ -1575,28 +1367,32 @@ const App = () => {
                 <input
                   type="number" step="0.1" min="0"
                   value={currentRange.analgesiaMin}
-                  onChange={(e) => setTherapeuticOverrides((prev) => ({
-                    ...prev,
-                    [drug]: { ...(prev[drug] || {}), analgesiaMin: Number(e.target.value), analgesiaMax: prev[drug]?.analgesiaMax ?? currentRange.analgesiaMax },
-                  }))}
+                  onChange={(e) => guarded(() => {
+                    const value = Number(e.target.value); finite(value,'range minimum');
+                    if (e.target.value === '' || value > currentRange.analgesiaMax) throw new RangeError();
+                    setTherapeuticOverrides(prev => ({...prev,[primaryDrugForChart]:
+                      {analgesiaMin:value,analgesiaMax:currentRange.analgesiaMax}}));
+                  })}
                   className="w-12 text-right border border-slate-300 dark:border-slate-600 rounded p-0.5 font-mono bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
                 />
                 <span className="text-slate-400">—</span>
                 <input
                   type="number" step="0.1" min="0"
                   value={currentRange.analgesiaMax}
-                  onChange={(e) => setTherapeuticOverrides((prev) => ({
-                    ...prev,
-                    [drug]: { ...(prev[drug] || {}), analgesiaMax: Number(e.target.value), analgesiaMin: prev[drug]?.analgesiaMin ?? currentRange.analgesiaMin },
-                  }))}
+                  onChange={(e) => guarded(() => {
+                    const value = Number(e.target.value); finite(value,'range maximum');
+                    if (e.target.value === '' || value < currentRange.analgesiaMin) throw new RangeError();
+                    setTherapeuticOverrides(prev => ({...prev,[primaryDrugForChart]:
+                      {analgesiaMin:currentRange.analgesiaMin,analgesiaMax:value}}));
+                  })}
                   className="w-12 text-right border border-slate-300 dark:border-slate-600 rounded p-0.5 font-mono bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
                 />
-                {therapeuticOverrides[drug] && (
+                {therapeuticOverrides[primaryDrugForChart] && (
                   <>
                     <button
                       onClick={() => setTherapeuticOverrides((prev) => {
                         const next = { ...prev };
-                        delete next[drug];
+                        delete next[primaryDrugForChart];
                         return next;
                       })}
                       className="text-slate-500 dark:text-slate-400 hover:text-blue-600 p-0.5"
@@ -1642,6 +1438,7 @@ const App = () => {
             className="h-[400px] w-full relative cursor-pointer"
             style={{ touchAction: 'pan-y' }}
             ref={chartWrapperRef}
+            data-testid="main-chart"
             onPointerDown={onChartPointerDown}
             onPointerMove={onChartPointerMove}
             onPointerUp={onChartPointerUp}
@@ -1665,7 +1462,7 @@ const App = () => {
               if (x < PLOT_LEFT || x > rect.width - PLOT_RIGHT_OFFSET) return;
               const xRatio = (x - PLOT_LEFT) / (rect.width - PLOT_LEFT - PLOT_RIGHT_OFFSET);
               const minute = Math.max(0, Math.min(simDuration, Math.round(xRatio * simDuration)));
-              const nearbyEvent = findEventNearMinute(events, minute);
+              const nearbyEvent = findEventNearMinute(calculationEvents, minute);
               setChartPopover({ open: true, x, y, minute, editingEventId: nearbyEvent?.id ?? null });
             }}
           >
@@ -1673,18 +1470,18 @@ const App = () => {
                 clipped by Therapeutic / Custom modes — Full always shows the peak. */}
             {yAxisInfo.dataPeak > calculatedYMax && yAxisInfo.dataPeak > 0 && (
               <div className="absolute top-2 left-16 z-10 text-[10px] font-mono bg-amber-50 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 rounded px-1.5 py-0.5 pointer-events-none shadow-sm">
-                {t('peakExceedsRange', { value: yAxisInfo.dataPeak.toFixed(1), unit: 'ng/mL', time: yAxisInfo.peakTime })}
+                {t('peakExceedsRange', { value: (yAxisInfo.dataPeak / chartDisplay.divisor).toFixed(2), unit: chartDisplay.unit, time: yAxisInfo.peakTime })}
               </div>
             )}
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
-                margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+                margin={{ top: yAxisInfo.dataPeak > calculatedYMax ? 35 : 5, right: 10, left: 0, bottom: 5 }}
                 onClick={(e) => {
                   // Phase 5-H-4: suppress the click that follows a drag release.
                   if (Date.now() - dragEndTimeRef.current < SUPPRESS_CLICK_MS) return;
                   if (e && e.activeLabel != null && e.chartX != null && e.chartY != null) {
                     const minute = Math.max(0, Math.round(Number(e.activeLabel)));
-                    const nearbyEvent = findEventNearMinute(events, minute);
+                    const nearbyEvent = findEventNearMinute(calculationEvents, minute);
                     setChartPopover({
                       open: true,
                       x: e.chartX,
@@ -1726,7 +1523,7 @@ const App = () => {
                     ticks={[0, 0.25, 0.5, 0.75, 1.0]}
                     tickFormatter={(v) => `${Math.round(v * 100)}%`}
                     stroke={chartColors.axisStroke}
-                    label={{ value: 'Resp Dep', angle: 90, position: 'insideRight', style: { textAnchor: 'middle', fill: chartColors.axisStroke }, fontSize: 11 }}
+                    label={{ value: t('riskIndexAxis'), angle: 90, position: 'insideRight', style: { textAnchor: 'middle', fill: chartColors.axisStroke }, fontSize: 11 }}
                     width={48}
                   />
                 )}
@@ -1737,11 +1534,13 @@ const App = () => {
                 <Tooltip
                   contentStyle={{ background: chartColors.tooltipBg, color: chartColors.tooltipText, border: `1px solid ${chartColors.tooltipBorder}` }}
                   content={
-                    <ChartTooltip
-                      events={events}
+                    <ChartTooltip t={t}
+                      events={calculationEvents}
                       isClockMode={isClockMode}
                       startTime={startTime}
                       timeZeroMinute={timeZeroMinute}
+                      displayDivisor={chartDisplay.divisor}
+                      patient={patient}
                     />
                   }
                 />
@@ -1840,27 +1639,28 @@ const App = () => {
                     y2={band.max}
                     fill={band.color || '#6366f1'}
                     fillOpacity={0.12}
-                    label={{ value: band.label, position: 'insideRight', fill: '#4338ca', fontSize: 10 }}
+                    label={{ value: band.label || `${band.min}–${band.max} ng/mL`, position: 'insideRight', fill: '#4338ca', fontSize: 10 }}
                   />
                 ))}
                 {showRanges && currentRange && chartClass === 'sedative' && currentRange.experimentalReferenceLine != null && (
                   <ReferenceLine
                     yAxisId="left"
-                    y={currentRange.experimentalReferenceLine}
+                    y={currentRange.experimentalReferenceLine.value}
                     stroke="#7c3aed"
                     strokeDasharray="4 2"
-                    label={{ value: `Heat-pain ref (${currentRange.experimentalReferenceLine} ng/mL)`, position: 'insideTopLeft', fill: '#6d28d9', fontSize: 10 }}
+                    label={{ value: `${t('experimentalRefShort')} ${currentRange.experimentalReferenceLine.value} ng/mL`, position: 'insideTopLeft', fill: '#6d28d9', fontSize: 10 }}
                   />
                 )}
 
                 {/* DOSING EVENT MARKERS — coloured by the event's drug */}
-                {events.flatMap((evt) => {
+                {calculationEvents.flatMap((evt) => {
                   const evtDrug = evt.drug || drug;
                   const shortName = DRUG_SHORT_NAMES[evtDrug] || evtDrug;
                   const colors = DRUG_COLORS[evtDrug] || { ce: '#a855f7', cp: '#fed7aa' };
                   const evtUnit = getDoseUnitForDrug(evtDrug);
                   if (evt.type === 'bolus') {
-                    const bolusText = `${shortName} ${evt.amount}${evtUnit}`;
+                    const prefix = evt.entryStatus === 'planned' ? `${t('entryPlanned')} ` : '';
+                    const bolusText = `${prefix}${shortName} ${evt.amount}${evtUnit}`;
                     return [
                       <ReferenceLine
                         key={`evt-bolus-${evt.id}`}
@@ -1878,10 +1678,10 @@ const App = () => {
                   }
                   if (evt.type === 'infusion') {
                     const endTime = evt.isInfinite ? simDuration : evt.time + evt.duration;
-                    const rateText = evt.originalRate && evt.originalUnit
-                      ? `${evt.originalRate} ${evt.originalUnit}`
-                      : `${evt.rate}/hr`;
-                    const inflText = `▶ ${shortName} ${rateText}`;
+                    const rateText = infusionText({...evt,drug:evtDrug},patient.weight);
+                    const prefix = evt.entryStatus === 'planned' ? `${t('entryPlanned')} ` : '';
+                    const inflText = `▶ ${prefix}${shortName} ${evt.seriesLabel || ''} ${evt.rate === 0 ? t('entryStop') : rateText}`;
+                    const lane = calculationEvents.filter(e => e.type === 'infusion' && e.time === evt.time).findIndex(e => e.id === evt.id) + 1;
                     return [
                       <ReferenceArea
                         key={`evt-inf-area-${evt.id}`}
@@ -1889,7 +1689,7 @@ const App = () => {
                         x1={evt.time}
                         x2={endTime}
                         fill={colors.cp}
-                        fillOpacity={0.18}
+                        fillOpacity={evt.rate === 0 ? 0 : 0.18}
                         ifOverflow="hidden"
                       />,
                       <ReferenceLine
@@ -1901,7 +1701,7 @@ const App = () => {
                         strokeDasharray="3 2"
                         ifOverflow="extendDomain"
                       >
-                        <Label value={inflText} position="insideTopLeft" fill={colors.ce} fontSize={10} fontWeight="bold" offset={4} dy={18} />
+                        <Label value={inflText} position="insideTopLeft" fill={colors.ce} fontSize={10} fontWeight="bold" offset={4} dy={18 * lane} />
                       </ReferenceLine>,
                       !evt.isInfinite && (
                         <ReferenceLine
@@ -1913,7 +1713,7 @@ const App = () => {
                           strokeDasharray="3 2"
                           ifOverflow="hidden"
                         >
-                          <Label value="◀" position="insideTopRight" fill={colors.ce} fontSize={11} offset={4} dy={18} />
+                          <Label value="◀" position="insideTopRight" fill={colors.ce} fontSize={11} offset={4} dy={18 * lane} />
                         </ReferenceLine>
                       )
                     ].filter(Boolean);
@@ -1922,13 +1722,13 @@ const App = () => {
                 })}
 
                 {/* SAVED TRACES — comparison overlays from "Add to Compare" / Compare All */}
-                {savedTraces.map((trace) => (
+                {visibleTraces.map((trace) => (
                   <Line
                     key={trace.id}
                     yAxisId="left"
                     data={trace.data}
                     type="monotone"
-                    dataKey="ce"
+                    dataKey={trace.data.some(p => p.ce != null) ? "ce" : "cp"}
                     name={`[Comp] ${trace.name}`}
                     stroke={trace.color}
                     strokeWidth={2}
@@ -1982,7 +1782,7 @@ const App = () => {
                       dot={false}
                       isAnimationActive={false}
                     />,
-                  ];
+                  ].filter((_,i) => i === 0 || sim.some(p => p.ce != null));
                 })}
 
                 {/* OPIOID RESPIRATORY DEPRESSION FRACTION — R/(1+R) where R = Σ Ce/RespC50.
@@ -2024,8 +1824,8 @@ const App = () => {
                     {t('now')} ({currentTime.getHours().toString().padStart(2, '0')}:{currentTime.getMinutes().toString().padStart(2, '0')})
                   </div>
                   <div className="grid grid-cols-2 gap-x-2 mt-1 text-slate-600 dark:text-slate-300">
-                    <span>Cp:</span> <span className="font-mono font-bold">{currentValues.cp}</span>
-                    <span>Ce:</span> <span className="font-mono font-bold">{currentValues.ce}</span>
+                    <span>Cp:</span> <span className="font-mono font-bold">{(currentValues.cp / (DRUG_DISPLAY[drug]?.divisor || 1)).toFixed(2)} {DRUG_DISPLAY[drug]?.unit || 'ng/mL'}</span>
+                    <span>Ce:</span> <span className="font-mono font-bold">{currentValues.ce == null ? '—' : (currentValues.ce / (DRUG_DISPLAY[drug]?.divisor || 1)).toFixed(2)} {DRUG_DISPLAY[drug]?.unit || 'ng/mL'}</span>
                   </div>
                 </div>
               )
@@ -2045,6 +1845,7 @@ const App = () => {
                 }}
                 initialMinute={chartPopover.minute}
                 initialDrug={drug}
+                patient={patient}
                 drugList={Object.keys(DRUG_UNITS)}
                 drugUnits={DRUG_UNITS}
                 drugShortNames={DRUG_SHORT_NAMES}
@@ -2083,7 +1884,7 @@ const App = () => {
                       const now = new Date();
                       const h = String(now.getHours()).padStart(2, '0');
                       const m = String(now.getMinutes()).padStart(2, '0');
-                      setStartTime(`${h}:${m}`);
+                      setStartTime(`${h}:${m}`); setClockStartDate(localDate(now));
                     }
                   }}
                   className="accent-blue-600 w-3 h-3"
@@ -2094,6 +1895,13 @@ const App = () => {
               {
                 isClockMode && (
                   <div className="flex items-center gap-1 mr-2">
+                    <input type="date" aria-label={t('clockStartDate')} value={clockStartDate}
+                      onChange={e => guarded(() => {
+                        const value=e.target.value;
+                        validateSnapshot({patient,drug,modelByDrug,events,simDuration,clockStartDate:value});
+                        if (!value) throw new RangeError(); setClockStartDate(value);
+                      })}
+                      className="text-xs border border-slate-300 dark:border-slate-600 rounded p-1 bg-white dark:bg-slate-800" />
                     <input
                       type="time"
                       value={startTime}
@@ -2136,7 +1944,7 @@ const App = () => {
                       const evtUnit = getDoseUnitForDrug(ev.drug || drug);
                       const label = ev.type === 'bolus'
                         ? `▼ ${short} ${ev.amount}${evtUnit} @ ${ev.time}min`
-                        : `▶ ${short} ${ev.originalRate ?? ev.rate}${ev.originalUnit ? ` ${ev.originalUnit}` : '/hr'} @ ${ev.time}min`;
+                        : `▶ ${short} ${infusionText({...ev,drug:ev.drug || drug},patient.weight)} @ ${ev.time}min`;
                       return <option key={ev.id} value={ev.time}>{label}</option>;
                     })}
                   </select>
@@ -2186,7 +1994,7 @@ const App = () => {
                   min="-1440"
                   max={Math.max(0, simDuration - 30)}
                   value={xAxisMin}
-                  onChange={(e) => setXAxisMin(Number(e.target.value))}
+                  onChange={(e) => guarded(() => { const value = Number(e.target.value); finite(value,"axis minimum",{min:-1440}); if (value >= simDuration) throw new RangeError(); setXAxisMin(value); })}
                   className="w-14 text-right text-xs border border-slate-300 dark:border-slate-600 rounded p-1 font-mono focus:ring-1 focus:ring-blue-400 outline-none bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
                   title={t('xAxisMinTooltip')}
                 />
@@ -2199,7 +2007,7 @@ const App = () => {
                   min="10"
                   max="2880"
                   value={simDuration}
-                  onChange={(e) => setSimDuration(Number(e.target.value))}
+                  onChange={(e) => guarded(() => { const value = Number(e.target.value); validateDuration(value); if (value <= xAxisMin) throw new RangeError(); setSimDuration(value); setMaxTimeScale(Math.max(maxTimeScale,value)); })}
                   className="w-16 text-right text-xs border border-slate-300 dark:border-slate-600 rounded p-1 pr-1 font-mono focus:ring-1 focus:ring-blue-400 outline-none bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
                 />
               </div>
@@ -2254,13 +2062,13 @@ const App = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <SummaryCard
               accent="pink"
-              label={t('summaryPeakCe')}
+              label={summaryMetrics.hasCe ? t('summaryPeakCe') : t('summaryPeakCp')}
               value={(summaryMetrics.peakCe.value / summaryMetrics.displayDivisor).toFixed(2)}
               footer={isClockMode
                 ? `${summaryMetrics.displayUnit} ${t('summaryAt')} ${minutesToTime(summaryMetrics.peakCe.time, startTime)} (+${summaryMetrics.peakCe.time}${t('summaryMin')})`
                 : `${summaryMetrics.displayUnit} ${t('summaryAt')} ${summaryMetrics.peakCe.time}${t('summaryMin')}`}
               helpKey="peak"
-              helpText={t('summaryPeakCeHelp')}
+              helpText={summaryMetrics.hasCe ? t('summaryPeakCeHelp') : t('ceUnavailable')}
               openId={summaryHelpOpen}
               setOpenId={setSummaryHelpOpen}
               t={t}
@@ -2268,7 +2076,7 @@ const App = () => {
 
             <SummaryCard
               accent="emerald"
-              label={summaryMetrics.isSedative ? 'BIS Onset' : t('summaryOnset')}
+              label={t('summaryBandOnset')}
               value={summaryMetrics.onsetTime !== null
                 ? (isClockMode
                     ? minutesToTime(summaryMetrics.onsetTime, startTime)
@@ -2276,9 +2084,9 @@ const App = () => {
                 : '—'}
               footer={summaryMetrics.onsetTime !== null
                 ? (isClockMode
-                    ? `+${summaryMetrics.onsetTime}${t('summaryMin')} (Ce ≥ ${summaryMetrics.onsetThreshold})`
-                    : `${t('summaryMin')} (Ce ≥ ${summaryMetrics.onsetThreshold})`)
-                : t('summaryNotReached')}
+                    ? `+${summaryMetrics.onsetTime}${t('summaryMin')} (Ce ≥ ${summaryMetrics.onsetThreshold} ${summaryMetrics.displayUnit})`
+                    : `${t('summaryMin')} (Ce ≥ ${summaryMetrics.onsetThreshold} ${summaryMetrics.displayUnit})`)
+                : summaryMetrics.hasCe ? t('summaryNotReached') : t('ceUnavailable')}
               helpKey="onset"
               helpText={summaryMetrics.isSedative ? t('summaryBisOnsetHelp') : t('summaryOnsetHelp')}
               openId={summaryHelpOpen}
@@ -2288,10 +2096,10 @@ const App = () => {
 
             <SummaryCard
               accent="red"
-              label={summaryMetrics.isSedative ? 'Deep sedation' : t('summaryRespRisk')}
-              value={summaryMetrics.respRiskMin}
+              label={summaryMetrics.isSedative ? t('summaryUpperBand') : t('summaryRespRisk')}
+              value={summaryMetrics.respRiskMin == null ? '—' : summaryMetrics.respRiskMin.toFixed(1)}
               footer={summaryMetrics.respRiskThreshold != null
-                ? `${t('summaryMin')} (Ce ≥ ${summaryMetrics.respRiskThreshold})`
+                ? `${t('summaryMin')} (Ce ≥ ${summaryMetrics.respRiskThreshold} ${summaryMetrics.displayUnit})`
                 : '—'}
               helpKey="resp"
               helpText={summaryMetrics.isSedative ? t('summaryDeepSedationHelp') : t('summaryRespRiskHelp')}
@@ -2334,13 +2142,13 @@ const App = () => {
         {/* Phase 5-L-4: rule-based clinical alerts strip. Sits between summary
             cards and the AUC panel so it competes for the same vertical real
             estate as the numbers it's interpreting. */}
-        {activeOpioids.length > 0 && simData.length > 0 && (
-          <ClinicalAlerts alerts={clinicalAlerts} t={t} />
+          {activeOpioids.length > 0 && simData.length > 0 && !simulation.error && (
+            <ClinicalAlerts alerts={clinicalAlerts} t={t} />
         )}
 
         {/* Phase 5-J-3: Opioid Burden (cumulative AUC) summary panel.
             Distinct from the right-axis instantaneous risk curve — see lib/burden.js. */}
-        {activeOpioids.length > 0 && (
+        {activeOpioids.length > 0 && !simulation.error && (
           <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg p-3 shadow-sm">
             <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
               <h3 className="text-xs font-bold uppercase tracking-wide text-slate-700 dark:text-slate-200 flex items-center gap-1">
@@ -2391,6 +2199,13 @@ const App = () => {
         )}
 
         {/* --- CONTROLS SECTION --- */}
+        <details data-testid="advanced-controls" open={editingId ? true : undefined} className="scroll-mt-32 sm:scroll-mt-20 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-500">{t('entryAdvanced')}</summary>
+          {editingId&&<div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-blue-50 dark:bg-blue-950 p-3 my-3">
+            <span className="text-sm font-semibold">{t('entryEditingHistory')}</span>
+            <label className="text-xs">{t('entryStatus')} <select data-testid="detail-status" value={editingEntryStatus} onChange={e=>setEditingEntryStatus(e.target.value)} className="rounded border p-2 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600">{['unclassified','administered','planned'].map(status=><option key={status} value={status}>{t(status==='unclassified'?'entryUnclassified':status==='planned'?'entryPlanned':'entryAdministered')}</option>)}</select></label>
+            <button type="button" data-testid="detail-cancel" onClick={cancelDetail} className="text-sm text-blue-600">{t('entryBackWithoutSave')}</button>
+          </div>}
         < div className="grid grid-cols-1 lg:grid-cols-12 gap-4" >
 
           {/* Left Column: Patient & Model (4 cols) */}
@@ -2508,17 +2323,17 @@ const App = () => {
           < div className="lg:col-span-8 space-y-4" >
             {/* Dosing Inputs */}
             < div className="grid grid-cols-1 md:grid-cols-2 gap-4" >
-              <div className={`p-4 rounded-xl shadow-sm border transition-colors ${editingId === 'bolus' ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'}`}>
+              <div className={`p-4 rounded-xl shadow-sm border transition-colors ${editingId?.type === 'bolus' ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'}`}>
                 <div className="flex items-center gap-2 mb-3 text-purple-600">
                   <Syringe className="h-4 w-4" />
                   <h3 className="font-bold text-sm">
-                    {editingId === 'bolus' ? t('bolusEditing') : t('bolusDose')}
+                    {editingId?.type === 'bolus' ? t('bolusEditing') : t('bolusDose')}
                   </h3>
                 </div>
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
                     <label className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold">{t('dose')} ({getDoseUnit()})</label>
-                    <input type="number" min="0" value={bolusAmount} onChange={e => setBolusAmount(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 dark:border-slate-600 rounded p-2 h-10 text-lg font-bold text-center text-purple-700 dark:text-purple-300 bg-white dark:bg-slate-800" />
+                    <input type="number" min="0" data-testid="detail-bolus-amount" value={bolusAmount} onChange={e => setBolusAmount(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 dark:border-slate-600 rounded p-2 h-10 text-lg font-bold text-center text-purple-700 dark:text-purple-300 bg-white dark:bg-slate-800" />
                   </div>
                   <div className="w-20">
                     <label className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold flex justify-between items-center mb-0.5">
@@ -2534,12 +2349,12 @@ const App = () => {
                     {isClockMode ? (
                       <input
                         type="time"
-                        value={minutesToTime(bolusTime, startTime)}
-                        onChange={e => setBolusTime(timeToMinutes(e.target.value, startTime))}
+                        data-testid="detail-bolus-clock" value={minutesToTime(bolusTime, startTime)}
+                        onChange={e => setBolusTime(timeToMinutes(e.target.value, startTime, Math.max(0,currentSimMinutes ?? 0)))}
                         className="w-full border border-slate-300 dark:border-slate-600 rounded px-1 h-10 text-center text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                       />
                     ) : (
-                      <input type="number" min="0" value={bolusTime} onChange={e => setBolusTime(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 dark:border-slate-600 rounded px-1 h-10 text-center bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
+                      <input type="number" min="0" data-testid="detail-bolus-time" value={bolusTime} onChange={e => setBolusTime(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 dark:border-slate-600 rounded px-1 h-10 text-center bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
                     )}
                     {isClockMode && (
                       <div className="flex gap-px mt-0.5">
@@ -2549,17 +2364,17 @@ const App = () => {
                       </div>
                     )}
                   </div>
-                  <button onClick={addBolus} className="bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-lg shadow active:scale-95 transition-transform">
-                    {editingId === 'bolus' ? <Save className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+                  <button data-testid="commit-bolus" onClick={addBolus} className="bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-lg shadow active:scale-95 transition-transform">
+                    {editingId?.type === 'bolus' ? <Save className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
                   </button>
                 </div>
               </div>
 
-              <div className={`p-4 rounded-xl shadow-sm border transition-colors ${editingId === 'infusion' ? 'bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'}`}>
+              <div className={`p-4 rounded-xl shadow-sm border transition-colors ${editingId?.type === 'infusion' ? 'bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'}`}>
                 <div className="flex items-center gap-2 mb-3 text-orange-600">
                   <Clock className="h-4 w-4" />
                   <h3 className="font-bold text-sm">
-                    {editingId === 'infusion' ? t('infusionEditing') : t('infusion')}
+                    {editingId?.type === 'infusion' ? t('infusionEditing') : t('infusion')}
                   </h3>
                 </div>
                 <div className="flex items-end gap-2">
@@ -2575,7 +2390,7 @@ const App = () => {
                         {DRUG_UNITS[drug]?.map(u => <option key={u} value={u}>{u}</option>)}
                       </select>
                     </label>
-                    <input type="number" min="0" value={infusionRate} onChange={e => setInfusionRate(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 dark:border-slate-600 rounded p-2 h-10 text-lg font-bold text-center text-orange-700 dark:text-orange-300 bg-white dark:bg-slate-800" />
+                    <input type="number" min="0" data-testid="detail-infusion-rate" value={infusionRate} onChange={e => setInfusionRate(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 dark:border-slate-600 rounded p-2 h-10 text-lg font-bold text-center text-orange-700 dark:text-orange-300 bg-white dark:bg-slate-800" />
                   </div>
                   <div className="w-16">
                     <label className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold flex justify-between items-center mb-0.5">
@@ -2591,12 +2406,12 @@ const App = () => {
                     {isClockMode ? (
                       <input
                         type="time"
-                        value={minutesToTime(infusionStartTime, startTime)}
-                        onChange={e => setInfusionStartTime(timeToMinutes(e.target.value, startTime))}
+                        data-testid="detail-infusion-clock" value={minutesToTime(infusionStartTime, startTime)}
+                        onChange={e => setInfusionStartTime(timeToMinutes(e.target.value, startTime, Math.max(0,currentSimMinutes ?? 0)))}
                         className="w-full border border-slate-300 dark:border-slate-600 rounded px-1 h-10 text-center text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                       />
                     ) : (
-                      <input type="number" min="0" value={infusionStartTime} onChange={e => setInfusionStartTime(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 dark:border-slate-600 rounded px-1 h-10 text-center bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
+                      <input type="number" min="0" data-testid="detail-infusion-time" value={infusionStartTime} onChange={e => setInfusionStartTime(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 dark:border-slate-600 rounded px-1 h-10 text-center bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
                     )}
                     {isClockMode && (
                       <div className="flex gap-px mt-0.5">
@@ -2622,7 +2437,7 @@ const App = () => {
                           type="time"
                           value={minutesToTime(infusionStartTime + infusionDuration, startTime)}
                           onChange={e => {
-                            let endMin = timeToMinutes(e.target.value, startTime);
+                            let endMin = timeToMinutes(e.target.value, startTime, infusionStartTime + 60);
                             let dur = endMin - infusionStartTime;
                             if (dur < 0) dur += 1440;
                             setInfusionDuration(dur);
@@ -2634,49 +2449,16 @@ const App = () => {
                       )
                     )}
                   </div>
-                  <button onClick={addInfusion} className="bg-orange-600 hover:bg-orange-700 text-white p-3 rounded-lg shadow active:scale-95 transition-transform">
-                    {editingId === 'infusion' ? <Save className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+                  <button data-testid="commit-infusion" onClick={addInfusion} className="bg-orange-600 hover:bg-orange-700 text-white p-3 rounded-lg shadow active:scale-95 transition-transform">
+                    {editingId?.type === 'infusion' ? <Save className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
                   </button>
                 </div>
               </div>
             </div >
 
-            {/* Event List */}
-            < div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden" >
-              <div className="bg-slate-50 dark:bg-slate-800 p-2 px-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                <h3 className="font-bold text-sm text-slate-600 dark:text-slate-300">{t('currentSchedule')}</h3>
-                <button onClick={() => setEvents([])} className="text-xs text-red-500 hover:underline">{t('clearAll')}</button>
-              </div>
-              <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
-                {events.length === 0 && <div className="p-4 text-center text-slate-400 dark:text-slate-500 text-xs">{t('noHistory')}</div>}
-                {events.sort((a, b) => a.time - b.time).map(evt => {
-                  const evtDrug = evt.drug || drug;
-                  const evtUnit = getDoseUnitForDrug(evtDrug);
-                  const evtShort = DRUG_SHORT_NAMES[evtDrug] || evtDrug;
-                  const evtColors = DRUG_COLORS[evtDrug] || { ce: '#a855f7' };
-                  return (
-                  <div key={evt.id} className="p-2 px-4 flex justify-between items-center text-sm hover:bg-slate-50 dark:hover:bg-slate-800">
-                    <div className="flex items-center gap-3">
-                      {evt.type === 'bolus' ? <Syringe className="w-4 h-4" style={{ color: evtColors.ce }} /> : <Activity className="w-4 h-4" style={{ color: evtColors.ce }} />}
-                      <span className="text-[10px] font-bold rounded px-1.5 py-0.5" style={{ backgroundColor: evtColors.ce + '22', color: evtColors.ce }}>{evtShort}</span>
-                      <span className="font-mono text-slate-500 dark:text-slate-400 dark:text-slate-500 w-12 text-right">{evt.time} min</span>
-                      <span className="font-medium text-slate-700 dark:text-slate-200">
-                        {evt.type === 'bolus' ? `${t('bolusLabel')}: ${evt.amount} ${evtUnit}` :
-                          `${t('infusionLabel')}: ${evt.originalRate || evt.rate} ${evt.originalUnit || (evtUnit + '/hr')} (${evt.duration}min)`}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => editEvent(evt)} title={t('editTooltip')} className="text-slate-300 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded"><Edit2 className="w-4 h-4" /></button>
-                      <button onClick={() => setEvents(events.filter(e => e.id !== evt.id))} title={t('deleteTooltip')} className="text-slate-300 hover:text-red-500 p-1.5 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
-                    </div>
-                  </div>
-                  );
-                })}
-              </div>
-            </div >
-
           </div >
         </div >
+        </details>
 
         {/* --- QUICK PRESETS --- (relocated to bottom; rarely used in routine OR flow) */}
         <div className="bg-white dark:bg-slate-900 p-3 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
