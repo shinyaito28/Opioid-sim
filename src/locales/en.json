@@ -281,5 +281,12 @@
   "simpleLastValid": "Calculation failed — the last valid graph is retained.",
   "simplePeak": "peak",
   "model": "Model",
-  "simpleImport": "Import backup"
+  "simpleImport": "Import backup",
+  "graphAuto": "Auto",
+  "graphUsingModel": "Using: {{model}}",
+  "graphView": "View",
+  "graphSpan": "{{minutes}} min",
+  "graphFirstDose": "First dose",
+  "graphReference": "Clock reference",
+  "graphReferenceHelp": "Set when patient input is completed for an empty case. Dose times are stored relative to it. Changing the displayed range does not move doses."
 }

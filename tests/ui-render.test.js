@@ -23,6 +23,8 @@ for(const language of ['en','ja'])test(language+': complete UI renders with one 
   assert.equal((html.match(/data-testid="shared-clock"/g)||[]).length,1);
   assert.equal((html.match(/role="tab"/g)||[]).length,2);
   assert(html.includes('data-testid="dose-add"'));assert(html.includes('data-testid="simple-graph"'));
+  assert(html.includes('data-testid="graph-model"'));assert(html.includes('data-testid="graph-used-model"'));
+  assert(html.includes('data-testid="graph-time-context"'));assert(html.includes('value="auto" selected'));
   assert(!html.includes('quick-status-'));assert(!html.includes('include-planned'));
   assert(!html.includes('For Research/Edu Only'));assert(!html.includes('6h</button>'));
   assert(!html.includes('12h</button>'));assert(!html.includes('24h</button>'));

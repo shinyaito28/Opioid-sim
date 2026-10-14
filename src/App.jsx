@@ -5,8 +5,8 @@ import SimpleDosePanel from './components/SimpleDosePanel';
 import SimpleHistory from './components/SimpleHistory';
 import SimpleGraph from './components/SimpleGraph';
 import TherapeuticReferenceModal from './components/TherapeuticReferenceModal';
-import {AVAILABLE_MODELS,DRUG_COLORS,DRUG_DISPLAY,THERAPEUTIC_RANGES,getPKParameters,convertToStandardUnit} from './lib/drugs.js';
-import {getBestModel,getModelRequirements} from './lib/modelSelection.js';
+import {DRUG_COLORS,DRUG_DISPLAY,THERAPEUTIC_RANGES,getPKParameters,convertToStandardUnit} from './lib/drugs.js';
+import {resolveModel,chooseModel,getModelRequirements} from './lib/modelSelection.js';
 import {processEvents,simulateConcentration} from './lib/simulation.js';
 import {validatePatient,validateDuration,newEventId,isValidPatient} from './lib/validation.js';
 import {CALCULATION_VERSION} from './lib/state.js';
@@ -34,7 +34,7 @@ function calculate(s) {
   validatePatient(s.patient);validateDuration(s.simDuration);
   const data=new Map(),params=new Map(),first=Math.min(0,...s.events.map(e=>e.time));
   for(const drug of new Set([s.drug,...s.events.map(e=>e.drug)])) {
-    const p=getPKParameters(drug,s.modelByDrug[drug]||getBestModel(drug,s.patient.age),s.patient);
+    const p=getPKParameters(drug,resolveModel(drug,s.patient.age,s.modelByDrug),s.patient);
     params.set(drug,p);data.set(drug,simulateConcentration(processEvents(s.events.filter(e=>e.drug===drug),s.simDuration),p,s.simDuration,drug,first));
   }
   return {data,params};
@@ -75,7 +75,7 @@ export default function App() {
       history.current.update(next,group);latest.current=next;setState(next);setInputError('');return true;
     }catch(error){setInputError(({RATE_COLLISION:'simpleRateCollision',LEGACY_STREAMS:'simpleLegacyStreams'})[error.code]||'invalidInput');return false;}
   };
-  const start=state.simSettings.startTime,model=state.modelByDrug[state.drug]||getBestModel(state.drug,state.patient.age);
+  const start=state.simSettings.startTime,model=resolveModel(state.drug,state.patient.age,state.modelByDrug);
   const currentMinute=elapsedMinutes(now,state.simSettings.clockStartDate,start),data=computed.data.get(state.drug)||[],params=computed.params.get(state.drug);
   const editingEvent=editing==null?null:state.events.find(e=>e.id===editing);
   const done=()=>{setEditing(null);history.current.endGroup();};
@@ -156,13 +156,13 @@ export default function App() {
       {state.patient.age<12&&(model.includes('Adult')||model.includes('General-purpose'))&&<p className="muted">{t('populationLimitNote')}</p>}
       {params?.ke0===0&&<p className="muted">{t('ceUnavailable')}</p>}
       <SimpleGraph data={data} drug={state.drug} startTime={start} currentMinute={currentMinute} range={{start:state.plotStart,end:state.simDuration}}
+        events={state.events} model={model} modelChoice={state.modelByDrug[state.drug]||'auto'}
+        onModelChoice={choice=>accept({modelByDrug:chooseModel(state.modelByDrug,state.drug,choice)})}
         onRange={range=>accept({plotStart:range.start,simDuration:range.end,manualRange:true},'range')} showRanges={showRanges}
         thresholds={{...THERAPEUTIC_RANGES[state.drug],...state.therapeuticOverrides[state.drug]}} savedTraces={visibleTraces} t={t}/>
       {state.events.some(e=>e.drug===state.drug&&(e.time<state.plotStart||e.time>state.simDuration))&&<p className="muted">{t('simpleOutsideRange')}</p>}
       <SimpleHistory events={state.events} drug={state.drug} patient={state.patient} startTime={start} onEdit={openEdit} onDelete={remove} editingId={editing} t={t}/>
       <details className="advanced-panel"><summary>{t('simpleDetails')}</summary><div className="advanced-content">
-        <label>{t('model')}<select aria-label={t('model')} value={model} onChange={e=>accept({modelByDrug:{...state.modelByDrug,[state.drug]:e.target.value}})}>
-          {AVAILABLE_MODELS[state.drug].map(m=><option key={m}>{m}</option>)}</select></label>
         <button className="quiet-button" onClick={()=>setReferenceOpen(true)}>{t('viewLiteratureLabel')}</button>
         {params&&<dl className="parameter-list">{['V1','V2','V3','Cl','Q2','Q3','ke0'].map(k=><div key={k}><dt>{k}</dt><dd>{Number(params[k]).toPrecision(4)}</dd></div>)}</dl>}
         <div className="advanced-actions"><button className="quiet-button" onClick={exportData}>{t('simpleExport')}</button>

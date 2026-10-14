@@ -30,3 +30,11 @@ export const getBestModel = (drug, age) => {
   if (drug === 'Dexmedetomidine') return 'Hannivoort (2015) Adult';
   return 'Bae (2020) Adult';
 };
+
+export const resolveModel = (drug,age,modelByDrug={}) => modelByDrug[drug]||getBestModel(drug,age);
+export function chooseModel(modelByDrug,drug,choice) {
+  const next={...modelByDrug};
+  if(choice==='auto')delete next[drug];
+  else next[drug]=choice;
+  return next;
+}

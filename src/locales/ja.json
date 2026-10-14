@@ -281,5 +281,12 @@
   "simpleLastValid": "計算できません。最後の有効なグラフを保持しています。",
   "simplePeak": "最大値",
   "model": "モデル",
-  "simpleImport": "バックアップを読み込む"
+  "simpleImport": "バックアップを読み込む",
+  "graphAuto": "Auto",
+  "graphUsingModel": "使用モデル：{{model}}",
+  "graphView": "表示範囲",
+  "graphSpan": "{{minutes}}分",
+  "graphFirstDose": "最初の投与",
+  "graphReference": "時計の基準",
+  "graphReferenceHelp": "投与入力のないケースで患者入力を完了した時刻です。投与時刻はこの基準からの経過分として保存します。表示範囲を変えても投与時刻は動きません。"
 }
