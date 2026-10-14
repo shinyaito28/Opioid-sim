@@ -9,7 +9,7 @@ import ScenarioMenu from './ScenarioMenu';
 export default function TopBar({
   t, i18n,
   showRanges, setShowRanges,
-  patient, setPatient, autoFillStats, setAutoFillStats, activeParams,
+  patient, setPatient, onPatientComplete, autoFillStats, setAutoFillStats, activeParams,
   savedScenarios, saveScenario, loadScenario, deleteScenario,
   currentScenarioId, isModified, lastSavedAt,
   isDark, setIsDark,
@@ -38,6 +38,7 @@ export default function TopBar({
         <PatientChip
           patient={patient}
           setPatient={setPatient}
+          onComplete={onPatientComplete}
           autoFillStats={autoFillStats}
           setAutoFillStats={setAutoFillStats}
           activeParams={activeParams}
@@ -98,9 +99,6 @@ export default function TopBar({
           <span className="hidden sm:inline">{t('ranges')}</span>
         </button>
 
-        <div className="text-[10px] bg-red-900/50 text-red-200 px-2 py-1 rounded border border-red-800 hidden md:block">
-          {t('forResearchOnly')}
-        </div>
       </div>
     </header>
   );

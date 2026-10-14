@@ -20,8 +20,10 @@ export function processEvents(events, duration) {
 }
 // RK4, event-aligned segments. Mass mcg; volume L; clearance L/min; time min.
 // Labels match the sampled state. ke0=0 returns Ce=null (model unavailable).
-export function simulateConcentration(events, p, duration, drug) {
+export function simulateConcentration(events, p, duration, drug, firstSample = 0) {
   validateDuration(duration);
+  finite(firstSample, 'first sample', { min: -MAX_SIM_MINUTES });
+  if (firstSample > duration) throw new RangeError('Invalid sampling range');
   validateParams(p);
   const {
     V1,
@@ -95,7 +97,12 @@ export function simulateConcentration(events, p, duration, drug) {
       ce: ke0 > 0 ? x[3] : null
     });
   };
-  for (let t = 0; t <= Math.floor(duration); t++) through(t);
-  if (!Number.isInteger(duration)) through(duration);
-  return data;
+  if (!Number.isInteger(firstSample)) through(firstSample);
+  for (let t = Math.ceil(firstSample); t <= Math.floor(duration); t++) through(t);
+  if (!Number.isInteger(duration) && data.at(-1)?.time !== duration) through(duration);
+  // Extra prehistory samples must not change the established RK4 partitions
+  // from time zero onward. Reuse the unchanged default calculation there.
+  return firstSample < 0
+    ? [...data.filter(point => point.time < 0), ...simulateConcentration(events,p,duration,drug)]
+    : data;
 }

@@ -14,6 +14,7 @@ export default function ScenarioMenu({
   t,
 }) {
   const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
   const ref = useRef(null);
 
   useEffect(() => {
@@ -26,9 +27,8 @@ export default function ScenarioMenu({
   }, [open]);
 
   const onSave = () => {
-    // Optional custom name; cancel keeps the auto-name.
-    const name = window.prompt(t('scenarioNamePrompt'), '');
     saveScenario(null, name && name.trim() ? name.trim() : null);
+    setName('');
   };
   const onOverwrite = () => {
     if (currentScenarioId == null) return;
@@ -55,6 +55,7 @@ export default function ScenarioMenu({
 
       {open && (
         <div className="absolute top-full mt-1 right-0 glass shadow-xl border border-slate-300 dark:border-slate-600 rounded-lg z-50 w-80 max-h-[60vh] overflow-y-auto text-slate-800 dark:text-slate-100">
+          <div className="p-3"><input aria-label={t('scenarioNamePrompt')} value={name} onChange={e=>setName(e.target.value)} placeholder={t('scenarioNamePrompt')} className="w-full"/></div>
           {currentScenarioId != null && (
             <button
               onClick={onOverwrite}
@@ -100,7 +101,7 @@ export default function ScenarioMenu({
                       )}
                     </span>
                     <span className="text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500 truncate">
-                      {s.data.events.length} events · {s.data.model}
+                      {s.data.events.length} events · {s.data.modelByDrug?.[s.data.drug]||s.data.model||s.data.drug}
                     </span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">

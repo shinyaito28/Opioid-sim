@@ -11,7 +11,7 @@ import { isValidPatient } from '../lib/validation';
 // Phase 5-N: activeParams (model requirements) is taken from App.jsx so each
 // input field can render an "unused" hint when the current drug/model doesn't
 // use that parameter. Empty array means "no model selected" — don't gray fields.
-export default function PatientChip({ patient, setPatient, autoFillStats, setAutoFillStats, activeParams = [], t }) {
+export default function PatientChip({ patient, setPatient, onComplete, autoFillStats, setAutoFillStats, activeParams = [], t }) {
   const isUnused = (p) => activeParams.length > 0 && !activeParams.includes(p);
   const unusedTag = (
     <span className="ml-1 text-[9px] font-normal normal-case text-slate-400 dark:text-slate-500">
@@ -94,7 +94,7 @@ export default function PatientChip({ patient, setPatient, autoFillStats, setAut
               />
               <span>{t('autoAdjust')}</span>
             </label>
-            <button onClick={() => { setFocused(false); collapse(); popoverRef.current?.querySelector('button')?.focus(); }} aria-label="Close" className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-white"><X className="w-4 h-4" /></button>
+            <button disabled={!valid} onClick={() => { onComplete?.(); setFocused(false); collapse(); popoverRef.current?.querySelector('button')?.focus(); }} className="tap-target px-2 text-blue-600 font-semibold">{t('simpleDone')}</button>
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-sm">
