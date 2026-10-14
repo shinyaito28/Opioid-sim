@@ -1,13 +1,14 @@
 import { LineChart,Line,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer,ReferenceLine,ReferenceArea } from 'recharts';
 import { clockParts } from '../lib/simpleInput.js';
-import { graphContext } from '../lib/graphContext.js';
+import { graphContext,graphDisplayRange } from '../lib/graphContext.js';
 import { DRUG_DISPLAY,DRUG_COLORS,AVAILABLE_MODELS } from '../lib/drugs.js';
 
 export default function SimpleGraph({data,drug,startTime,currentMinute,range,onRange,showRanges,thresholds,savedTraces,
   events,model,modelChoice,onModelChoice,t}) {
   const display=DRUG_DISPLAY[drug]||{unit:'ng/mL',divisor:1},divisor=display.divisor||1,colors=DRUG_COLORS[drug];
   const clock=value=>{const p=clockParts(value,startTime);return p.hour+':'+p.minute;};
-  const context=graphContext({range,startTime,currentMinute,events,drug});
+  const displayRange=graphDisplayRange(range);
+  const context=graphContext({range:displayRange,startTime,currentMinute,events,drug});
   const chartData=data.map(p=>({...p,cp:p.cp/divisor,ce:p.ce==null?null:p.ce/divisor}));
   const lower=thresholds?.analgesiaMin??thresholds?.bisTarget?.min,upper=thresholds?.analgesiaMax??thresholds?.bisTarget?.max;
   return <section className="graph-panel" data-testid="simple-graph">
@@ -29,7 +30,7 @@ export default function SimpleGraph({data,drug,startTime,currentMinute,range,onR
     <div className="graph-canvas"><ResponsiveContainer width="100%" height="100%">
       <LineChart data={chartData} margin={{top:12,right:16,bottom:6,left:0}}>
         <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1"/>
-        <XAxis dataKey="time" type="number" domain={[range.start,range.end]} allowDataOverflow tickFormatter={clock} tick={{fontSize:12}}/>
+        <XAxis dataKey="time" type="number" domain={[displayRange.start,displayRange.end]} allowDataOverflow tickFormatter={clock} tick={{fontSize:12}}/>
         <YAxis domain={[0,'auto']} tick={{fontSize:12}} width={48}/>
         <Tooltip labelFormatter={value=>{const p=clockParts(value,startTime);return clock(value)+(p.day?' ('+(p.day>0?'+':'')+p.day+'d)':'');}}
           formatter={(value,name)=>[value==null?'—':Number(value).toFixed(3)+' '+display.unit,name]}/>
@@ -38,7 +39,7 @@ export default function SimpleGraph({data,drug,startTime,currentMinute,range,onR
         <Line type="linear" dataKey="ce" name="Ce" stroke={colors.ce} strokeWidth={2.5} dot={false} connectNulls={false} isAnimationActive={false}/>
         {savedTraces.map(trace=><Line key={trace.id} data={trace.data.map(p=>({...p,cp:p.cp/divisor,ce:p.ce==null?null:p.ce/divisor}))}
           type="linear" dataKey="ce" name={trace.name} stroke={trace.color} strokeDasharray="5 3" dot={false} isAnimationActive={false}/>)}
-        {currentMinute>=range.start&&currentMinute<=range.end&&<ReferenceLine x={currentMinute} stroke="#64748b" strokeDasharray="4 4"
+        {currentMinute>=displayRange.start&&currentMinute<=displayRange.end&&<ReferenceLine x={currentMinute} stroke="#64748b" strokeDasharray="4 4"
           label={{value:t('now'),position:'insideTopRight',fontSize:11,fill:'#64748b'}}/>}
       </LineChart>
     </ResponsiveContainer></div>

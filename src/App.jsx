@@ -16,6 +16,7 @@ import {BACKUP_KEY,LEGACY_KEY,readSimpleStorage,writeSimpleStorage,validateSimpl
 import {createUndoHistory} from './lib/undo.js';
 import {useDarkMode} from './hooks/useDarkMode';
 import {estimateGrowth} from './lib/growth.js';
+import {graphSampleStart} from './lib/graphContext.js';
 
 function freshCase() {
   const now=new Date(),start=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
@@ -32,7 +33,7 @@ function hydrate(data) {
 }
 function calculate(s) {
   validatePatient(s.patient);validateDuration(s.simDuration);
-  const data=new Map(),params=new Map(),first=Math.min(0,...s.events.map(e=>e.time));
+  const data=new Map(),params=new Map(),first=graphSampleStart({start:s.plotStart,end:s.simDuration},s.events);
   for(const drug of new Set([s.drug,...s.events.map(e=>e.drug)])) {
     const p=getPKParameters(drug,resolveModel(drug,s.patient.age,s.modelByDrug),s.patient);
     params.set(drug,p);data.set(drug,simulateConcentration(processEvents(s.events.filter(e=>e.drug===drug),s.simDuration),p,s.simDuration,drug,first));
