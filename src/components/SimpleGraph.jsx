@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useMemo,useState } from 'react';
 import { LineChart,Line,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer,ReferenceLine,ReferenceArea } from 'recharts';
 import { clockParts } from '../lib/simpleInput.js';
 import { graphContext,graphDisplayRange } from '../lib/graphContext.js';
 import { DRUG_DISPLAY,DRUG_COLORS,AVAILABLE_MODELS } from '../lib/drugs.js';
-import {concentrationBand,parseYAxisMax,suggestedYAxisMax} from '../lib/graphScale.js';
+import {concentrationBand,suggestedYAxisMax,yAxisSlider,yAxisFromSlider} from '../lib/graphScale.js';
 
 export default function SimpleGraph({data,drug,startTime,currentMinute,range,onRange,showRanges,thresholds,savedTraces,
   events,model,modelChoice,onModelChoice,t}) {
@@ -11,11 +11,12 @@ export default function SimpleGraph({data,drug,startTime,currentMinute,range,onR
   const clock=value=>{const p=clockParts(value,startTime);return p.hour+':'+p.minute;};
   const displayRange=graphDisplayRange(range);
   const context=graphContext({range:displayRange,startTime,currentMinute,events,drug});
-  const chartData=data.map(p=>({...p,cp:p.cp/divisor,ce:p.ce==null?null:p.ce/divisor}));
+  const chartData=useMemo(()=>data.map(p=>({...p,cp:p.cp/divisor,ce:p.ce==null?null:p.ce/divisor})),[data,divisor]);
   const band=concentrationBand(drug,thresholds,divisor);
-  const [axisMode,setAxisMode]=useState('auto'),[axisDraft,setAxisDraft]=useState(''),[axisMax,setAxisMax]=useState(null);
-  const axisInvalid=axisMode==='manual'&&parseYAxisMax(axisDraft)===null;
-  const clipped=axisMode==='manual'&&chartData.some(p=>p.time>=displayRange.start&&p.time<=displayRange.end&&(p.cp>axisMax||p.ce>axisMax));
+  const automaticMax=useMemo(()=>suggestedYAxisMax([...chartData,...savedTraces.flatMap(trace=>trace.data.map(p=>({ce:p.ce==null?null:p.ce/divisor})))],
+    showRanges?band:null),[chartData,savedTraces,divisor,showRanges,band?.upper]);
+  const [axisMax,setAxisMax]=useState(null),upper=axisMax??automaticMax,slider=yAxisSlider(automaticMax,axisMax);
+  const clipped=axisMax!==null&&chartData.some(p=>p.time>=displayRange.start&&p.time<=displayRange.end&&(p.cp>upper||p.ce>upper));
   return <section className="graph-panel" data-testid="simple-graph">
     <div className="graph-heading"><h2><span className="curve-legend"><i style={{borderColor:colors.cp}}/>Cp</span>
       <span className="curve-legend"><i style={{borderColor:colors.ce}}/>Ce</span></h2><span className="muted">{display.unit}</span></div>
@@ -26,16 +27,6 @@ export default function SimpleGraph({data,drug,startTime,currentMinute,range,onR
       </select></label>
       <span className="graph-used-model" data-testid="graph-used-model">{t('graphUsingModel',{model})}</span>
     </div>
-    <div className="graph-y-controls" data-testid="graph-y-controls">
-      <label>{t('graphYAxis')} <select aria-label={t('graphYAxis')} value={axisMode} onChange={e=>{
-        setAxisMode(e.target.value);
-        if(e.target.value==='manual'&&axisMax===null){const upper=suggestedYAxisMax(chartData,showRanges?band:null);setAxisMax(upper);setAxisDraft(String(upper));}
-      }}><option value="auto">{t('graphAuto')}</option><option value="manual">{t('graphManual')}</option></select></label>
-      {axisMode==='manual'&&<label>{t('graphUpperLimit')} <input type="text" inputMode="decimal" aria-label={t('graphUpperLimit')}
-        aria-invalid={axisInvalid} value={axisDraft} onChange={e=>{setAxisDraft(e.target.value);const upper=parseYAxisMax(e.target.value);if(upper!==null)setAxisMax(upper);}}/>
-        <span>{display.unit}</span></label>}
-    </div>
-    {axisInvalid&&<p className="graph-axis-note" role="status">{t('graphYInvalid',{unit:display.unit})}</p>}
     {clipped&&<p className="graph-axis-note">{t('graphYClipped',{upper:axisMax,unit:display.unit})}</p>}
     {showRanges&&band&&<p className="graph-band-note" data-testid="graph-band-note"><i aria-hidden="true"/>{t(band.labelKey,{lower:band.lower,upper:band.upper,unit:display.unit})}</p>}
     <div className="graph-context" data-testid="graph-time-context">
@@ -48,7 +39,7 @@ export default function SimpleGraph({data,drug,startTime,currentMinute,range,onR
       <LineChart data={chartData} margin={{top:12,right:16,bottom:6,left:0}}>
         <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1"/>
         <XAxis dataKey="time" type="number" domain={[displayRange.start,displayRange.end]} allowDataOverflow tickFormatter={clock} tick={{fontSize:12}}/>
-        <YAxis domain={[0,axisMode==='manual'?axisMax:'auto']} allowDataOverflow={axisMode==='manual'} tick={{fontSize:12}} width={48}/>
+        <YAxis domain={[0,upper]} allowDataOverflow tick={{fontSize:12}} width={48}/>
         <Tooltip labelFormatter={value=>{const p=clockParts(value,startTime);return clock(value)+(p.day?' ('+(p.day>0?'+':'')+p.day+'d)':'');}}
           formatter={(value,name,item)=>{
             // At an instantaneous jump the tooltip reports the post-dose value.
@@ -67,6 +58,15 @@ export default function SimpleGraph({data,drug,startTime,currentMinute,range,onR
           label={{value:t('now'),position:'insideTopRight',fontSize:11,fill:'#64748b'}}/>}
       </LineChart>
     </ResponsiveContainer></div>
+    <div className="graph-range graph-y-controls" data-testid="graph-y-controls">
+      <label className="range-bar"><span className="field-label">{t('graphYAxis')} <output data-testid="graph-y-limit">{Number(upper.toPrecision(3))} {display.unit}</output></span>
+        <input type="range" aria-label={t('graphYAxis')} aria-valuetext={Number(upper.toPrecision(3))+' '+display.unit}
+          min={slider.min} max={slider.max} step="any" value={slider.value} onChange={e=>{
+            const value=yAxisFromSlider(e.target.value,slider);if(value!==null)setAxisMax(value);
+          }}/>
+      </label>
+      <button type="button" className="quiet-button" aria-pressed={axisMax===null} onClick={()=>setAxisMax(null)}>{t('graphAuto')}</button>
+    </div>
     <div className="graph-range">
       <label className="range-bar"><span className="field-label">{t('simpleRange')}</span>
         <input type="range" aria-label={t('simpleRange')} min={Math.sqrt(30)} max={Math.sqrt(1440)} step="0.1"

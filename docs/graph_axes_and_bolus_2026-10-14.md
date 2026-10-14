@@ -1,6 +1,6 @@
 # Bolus edges, Y axis and reference shading
 
-Validation: all 94 tests passed, including actual Recharts SVG path geometry for the vertical bolus segment, fractional peaks, overlapping infusions, simultaneous/repeated/moved boluses, negative time/midnight, unchanged independent PK fixture samples, axis-limit validation, band units and English/Japanese rendering. Interactive browser verification remains pending because the Windows screen tool cannot initialize.
+Validation: all 96 tests passed, including actual Recharts SVG path geometry for the vertical bolus segment, fractional peaks, overlapping infusions, simultaneous/repeated/moved boluses, negative time/midnight, unchanged independent PK fixture samples, positive/monotonic slider scales, Auto/manual scaling, band units and English/Japanese rendering with two range bars. Interactive browser verification remains pending because the Windows screen tool cannot initialize.
 
 ## Verified cause
 
@@ -10,7 +10,7 @@ The chart now opts into exact event-edge samples. Bolus groups have before/after
 
 ## Y axis
 
-Auto is the default. Manual reveals one upper-limit field in the displayed concentration unit; the lower bound remains zero. Only complete, finite, positive values apply. Incomplete or invalid text retains the last valid limit with an inline message. Curves outside a manual upper limit are clipped, with a short notice. The graph is keyed by drug, so a drug change resets its local Y-axis controls to Auto rather than carrying another drug's scale. Y-axis preferences do not alter or persist simulation conditions.
+Auto is the default. Following the user's bar-control request, one slider now adjusts the upper limit directly, with the same square-root mapping and range-bar styling as the X control. The lower bound remains zero. A small readout shows the upper limit and concentration unit; one Auto button restores automatic scaling. Dragging applies immediately. The default slider bounds span 1/20 to five times the automatic upper limit and always remain positive; an existing manual value remains representable if the data changes. Auto includes the current curves, visible saved Ce comparisons and any displayed reference band with 10% headroom. Curves outside a manual upper limit are clipped, with a short notice. The graph is keyed by drug, so a drug change resets its local Y-axis controls to Auto rather than carrying another drug's scale. Y-axis preferences do not alter or persist simulation conditions.
 
 ## Shading
 

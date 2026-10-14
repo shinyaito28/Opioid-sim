@@ -80,14 +80,13 @@ button { touch-action: manipulation; }
 .graph-context { font-size:12px; line-height:1.7; color:#64748b; margin-bottom:6px; font-variant-numeric:tabular-nums; }
 .graph-view { font-size:13px; color:#334155; }
 .graph-reference { font-size:11px; }
-.graph-y-controls { display:flex; align-items:center; flex-wrap:wrap; gap:6px 12px; margin-bottom:8px; font-size:12px; color:#64748b; }
-.graph-y-controls label { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
-.simple-app .graph-y-controls select,.simple-app .graph-y-controls input { min-height:44px; font-size:14px; padding:5px 8px; }
-.simple-app .graph-y-controls input { width:105px; }
+.graph-y-controls .field-label { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.graph-y-controls output { font-weight:400; font-variant-numeric:tabular-nums; }
+.graph-y-controls button { font-size:12px; }
+.graph-y-controls button[aria-pressed="true"] { color:#fff; background:#0369a1; }
 .graph-band-note { font-size:12px; line-height:1.6; color:#475569; margin:4px 0 8px; }
 .graph-band-note i { display:inline-block; width:14px; height:10px; margin-right:6px; background:#10b98122; border:1px solid #10b98188; }
 .graph-axis-note { font-size:12px; color:#b45309; margin:4px 0 8px; }
-.dark .graph-y-controls { color:#94a3b8; }
 .dark .graph-band-note { color:#cbd5e1; }
 .dark .graph-axis-note { color:#fbbf24; }
 .dark .graph-model label,.dark .graph-context { color:#94a3b8; }
