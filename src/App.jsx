@@ -36,7 +36,7 @@ function calculate(s) {
   const data=new Map(),params=new Map(),first=graphSampleStart({start:s.plotStart,end:s.simDuration},s.events);
   for(const drug of new Set([s.drug,...s.events.map(e=>e.drug)])) {
     const p=getPKParameters(drug,resolveModel(drug,s.patient.age,s.modelByDrug),s.patient);
-    params.set(drug,p);data.set(drug,simulateConcentration(processEvents(s.events.filter(e=>e.drug===drug),s.simDuration),p,s.simDuration,drug,first));
+    params.set(drug,p);data.set(drug,simulateConcentration(processEvents(s.events.filter(e=>e.drug===drug),s.simDuration),p,s.simDuration,drug,first,true));
   }
   return {data,params};
 }
@@ -156,7 +156,7 @@ export default function App() {
       {(model.includes('Scaled')||(state.drug==='Hydromorphone'&&model==='Standard (Adult)'))&&<p className="muted">{t('unsourcedModelNote')}</p>}
       {state.patient.age<12&&(model.includes('Adult')||model.includes('General-purpose'))&&<p className="muted">{t('populationLimitNote')}</p>}
       {params?.ke0===0&&<p className="muted">{t('ceUnavailable')}</p>}
-      <SimpleGraph data={data} drug={state.drug} startTime={start} currentMinute={currentMinute} range={{start:state.plotStart,end:state.simDuration}}
+      <SimpleGraph key={state.drug} data={data} drug={state.drug} startTime={start} currentMinute={currentMinute} range={{start:state.plotStart,end:state.simDuration}}
         events={state.events} model={model} modelChoice={state.modelByDrug[state.drug]||'auto'}
         onModelChoice={choice=>accept({modelByDrug:chooseModel(state.modelByDrug,state.drug,choice)})}
         onRange={range=>accept({plotStart:range.start,simDuration:range.end,manualRange:true},'range')} showRanges={showRanges}

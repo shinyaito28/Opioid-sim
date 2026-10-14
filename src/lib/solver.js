@@ -20,7 +20,7 @@ export function processEvents(events, duration) {
 }
 // RK4, event-aligned segments. Mass mcg; volume L; clearance L/min; time min.
 // Labels match the sampled state. ke0=0 returns Ce=null (model unavailable).
-export function simulateConcentration(events, p, duration, drug, firstSample = 0) {
+export function simulateConcentration(events, p, duration, drug, firstSample = 0, sampleEventEdges = false) {
   validateDuration(duration);
   finite(firstSample, 'first sample', { min: -MAX_SIM_MINUTES });
   if (firstSample > duration) throw new RangeError('Invalid sampling range');
@@ -77,25 +77,30 @@ export function simulateConcentration(events, p, duration, drug, firstSample = 0
     }
     time = target;
   };
+  const capture = (target, edge) => data.push({time:target,cp:x[0]/V1,ce:ke0>0?x[3]:null,...(edge?{edge}:{})});
   const through = target => {
     while (index < queue.length && queue[index].time <= target + 1e-10) {
       const et = queue[index].time;
       advance(et);
-      while (index < queue.length && Math.abs(queue[index].time - et) < 1e-10) {
+      let groupEnd=index;
+      while(groupEnd<queue.length&&Math.abs(queue[groupEnd].time-et)<1e-10)groupEnd++;
+      const visibleEdge=sampleEventEdges&&et>=firstSample;
+      const hasBolus=visibleEdge&&queue.slice(index,groupEnd).some(e=>e.type==='bolus');
+      // A bolus is discontinuous in Cp. Both points share the exact event time;
+      // Ce and infusion boundaries stay continuous. Capturing never advances RK4.
+      if(hasBolus)capture(et,'before');
+      while (index < groupEnd) {
         const e = queue[index++];
         if (e.type === 'bolus') x[0] += e.amount * scale;else if (e.type === 'infusion_start') {
           if (active.has(e.id)) throw new RangeError('Duplicate active infusion ID');
           active.set(e.id, e.rate * scale / 60);
         } else active.delete(e.startId);
       }
+      if(visibleEdge)capture(et,hasBolus?'after':undefined);
     }
     advance(target);
     if (x.some(v => !Number.isFinite(v)) || !Number.isFinite(x[0] / V1)) throw new RangeError('Nonfinite simulation state');
-    data.push({
-      time: target,
-      cp: x[0] / V1,
-      ce: ke0 > 0 ? x[3] : null
-    });
+    if(!sampleEventEdges||data.at(-1)?.time!==target)capture(target);
   };
   if (!Number.isInteger(firstSample)) through(firstSample);
   for (let t = Math.ceil(firstSample); t <= Math.floor(duration); t++) through(t);
@@ -103,6 +108,6 @@ export function simulateConcentration(events, p, duration, drug, firstSample = 0
   // Extra prehistory samples must not change the established RK4 partitions
   // from time zero onward. Reuse the unchanged default calculation there.
   return firstSample < 0
-    ? [...data.filter(point => point.time < 0), ...simulateConcentration(events,p,duration,drug)]
+    ? [...data.filter(point => point.time < 0), ...simulateConcentration(events,p,duration,drug,0,sampleEventEdges)]
     : data;
 }

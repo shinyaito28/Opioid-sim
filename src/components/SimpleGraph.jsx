@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { LineChart,Line,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer,ReferenceLine,ReferenceArea } from 'recharts';
 import { clockParts } from '../lib/simpleInput.js';
 import { graphContext,graphDisplayRange } from '../lib/graphContext.js';
 import { DRUG_DISPLAY,DRUG_COLORS,AVAILABLE_MODELS } from '../lib/drugs.js';
+import {concentrationBand,parseYAxisMax,suggestedYAxisMax} from '../lib/graphScale.js';
 
 export default function SimpleGraph({data,drug,startTime,currentMinute,range,onRange,showRanges,thresholds,savedTraces,
   events,model,modelChoice,onModelChoice,t}) {
@@ -10,7 +12,10 @@ export default function SimpleGraph({data,drug,startTime,currentMinute,range,onR
   const displayRange=graphDisplayRange(range);
   const context=graphContext({range:displayRange,startTime,currentMinute,events,drug});
   const chartData=data.map(p=>({...p,cp:p.cp/divisor,ce:p.ce==null?null:p.ce/divisor}));
-  const lower=thresholds?.analgesiaMin??thresholds?.bisTarget?.min,upper=thresholds?.analgesiaMax??thresholds?.bisTarget?.max;
+  const band=concentrationBand(drug,thresholds,divisor);
+  const [axisMode,setAxisMode]=useState('auto'),[axisDraft,setAxisDraft]=useState(''),[axisMax,setAxisMax]=useState(null);
+  const axisInvalid=axisMode==='manual'&&parseYAxisMax(axisDraft)===null;
+  const clipped=axisMode==='manual'&&chartData.some(p=>p.time>=displayRange.start&&p.time<=displayRange.end&&(p.cp>axisMax||p.ce>axisMax));
   return <section className="graph-panel" data-testid="simple-graph">
     <div className="graph-heading"><h2><span className="curve-legend"><i style={{borderColor:colors.cp}}/>Cp</span>
       <span className="curve-legend"><i style={{borderColor:colors.ce}}/>Ce</span></h2><span className="muted">{display.unit}</span></div>
@@ -21,6 +26,18 @@ export default function SimpleGraph({data,drug,startTime,currentMinute,range,onR
       </select></label>
       <span className="graph-used-model" data-testid="graph-used-model">{t('graphUsingModel',{model})}</span>
     </div>
+    <div className="graph-y-controls" data-testid="graph-y-controls">
+      <label>{t('graphYAxis')} <select aria-label={t('graphYAxis')} value={axisMode} onChange={e=>{
+        setAxisMode(e.target.value);
+        if(e.target.value==='manual'&&axisMax===null){const upper=suggestedYAxisMax(chartData,showRanges?band:null);setAxisMax(upper);setAxisDraft(String(upper));}
+      }}><option value="auto">{t('graphAuto')}</option><option value="manual">{t('graphManual')}</option></select></label>
+      {axisMode==='manual'&&<label>{t('graphUpperLimit')} <input type="text" inputMode="decimal" aria-label={t('graphUpperLimit')}
+        aria-invalid={axisInvalid} value={axisDraft} onChange={e=>{setAxisDraft(e.target.value);const upper=parseYAxisMax(e.target.value);if(upper!==null)setAxisMax(upper);}}/>
+        <span>{display.unit}</span></label>}
+    </div>
+    {axisInvalid&&<p className="graph-axis-note" role="status">{t('graphYInvalid',{unit:display.unit})}</p>}
+    {clipped&&<p className="graph-axis-note">{t('graphYClipped',{upper:axisMax,unit:display.unit})}</p>}
+    {showRanges&&band&&<p className="graph-band-note" data-testid="graph-band-note"><i aria-hidden="true"/>{t(band.labelKey,{lower:band.lower,upper:band.upper,unit:display.unit})}</p>}
     <div className="graph-context" data-testid="graph-time-context">
       <p className="graph-view">{t('graphView')}: <strong>{context.start}–{context.end}</strong>
         <span> · {t('graphSpan',{minutes:Number(context.spanMinutes.toFixed(2))})}</span></p>
@@ -31,10 +48,17 @@ export default function SimpleGraph({data,drug,startTime,currentMinute,range,onR
       <LineChart data={chartData} margin={{top:12,right:16,bottom:6,left:0}}>
         <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1"/>
         <XAxis dataKey="time" type="number" domain={[displayRange.start,displayRange.end]} allowDataOverflow tickFormatter={clock} tick={{fontSize:12}}/>
-        <YAxis domain={[0,'auto']} tick={{fontSize:12}} width={48}/>
+        <YAxis domain={[0,axisMode==='manual'?axisMax:'auto']} allowDataOverflow={axisMode==='manual'} tick={{fontSize:12}} width={48}/>
         <Tooltip labelFormatter={value=>{const p=clockParts(value,startTime);return clock(value)+(p.day?' ('+(p.day>0?'+':'')+p.day+'d)':'');}}
-          formatter={(value,name)=>[value==null?'—':Number(value).toFixed(3)+' '+display.unit,name]}/>
-        {showRanges&&lower!=null&&upper!=null&&<ReferenceArea y1={lower/divisor} y2={upper/divisor} fill="#10b981" fillOpacity={0.09}/>}
+          formatter={(value,name,item)=>{
+            // At an instantaneous jump the tooltip reports the post-dose value.
+            if(item?.payload?.edge==='before'&&(name==='Cp'||name==='Ce')){
+              const after=chartData.findLast(point=>point.time===item.payload.time);
+              if(after)value=after[name==='Cp'?'cp':'ce'];
+            }
+            return [value==null?'—':Number(value).toFixed(3)+' '+display.unit,name];
+          }}/>
+        {showRanges&&band&&<ReferenceArea y1={band.lower} y2={band.upper} ifOverflow="hidden" fill="#10b981" fillOpacity={0.09}/>}
         <Line type="linear" dataKey="cp" name="Cp" stroke={colors.cp} strokeWidth={2} dot={false} isAnimationActive={false}/>
         <Line type="linear" dataKey="ce" name="Ce" stroke={colors.ce} strokeWidth={2.5} dot={false} connectNulls={false} isAnimationActive={false}/>
         {savedTraces.map(trace=><Line key={trace.id} data={trace.data.map(p=>({...p,cp:p.cp/divisor,ce:p.ce==null?null:p.ce/divisor}))}

@@ -25,6 +25,9 @@ for(const language of ['en','ja'])test(language+': complete UI renders with one 
   assert(html.includes('data-testid="dose-add"'));assert(html.includes('data-testid="simple-graph"'));
   assert(html.includes('data-testid="graph-model"'));assert(html.includes('data-testid="graph-used-model"'));
   assert(html.includes('data-testid="graph-time-context"'));assert(html.includes('value="auto" selected'));
+  assert(html.includes('data-testid="graph-y-controls"'));assert(html.includes('data-testid="graph-band-note"'));
+  assert(!html.includes('graphBandAnalgesia'));assert(!html.includes('graphYAxis'));
+  assert(html.includes(language==='en'?'Not a safety range.':'安全域を示すものではありません。'));
   assert(!html.includes('quick-status-'));assert(!html.includes('include-planned'));
   assert(!html.includes('For Research/Edu Only'));assert(!html.includes('6h</button>'));
   assert(!html.includes('12h</button>'));assert(!html.includes('24h</button>'));
