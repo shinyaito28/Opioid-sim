@@ -17,6 +17,7 @@ import {createUndoHistory} from './lib/undo.js';
 import {useDarkMode} from './hooks/useDarkMode';
 import {estimateGrowth} from './lib/growth.js';
 import {graphSampleStart} from './lib/graphContext.js';
+import {scrollApplicationBy} from './lib/appViewport.js';
 
 function freshCase() {
   const now=new Date(),start=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
@@ -67,7 +68,7 @@ export default function App() {
     const reveal=e=>{if(!panelRef.current?.contains(e.target)||!e.target.matches('input'))return;
       setTimeout(()=>{if(document.activeElement!==e.target)return;
         const v=window.visualViewport,bottom=(v?.height??window.innerHeight)+(v?.offsetTop??0),rect=e.target.getBoundingClientRect();
-        if(rect.bottom>bottom-20)window.scrollBy({top:rect.bottom-bottom+32,behavior:'smooth'});},180);};
+        if(rect.bottom>bottom-20)scrollApplicationBy(window,document,{top:rect.bottom-bottom+32,behavior:'smooth'});},180);};
     document.addEventListener('focusin',reveal);return()=>document.removeEventListener('focusin',reveal);
   },[]);
   const computed=useMemo(()=>calculate(state),[state]);

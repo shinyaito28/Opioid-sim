@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import {APP_CHROME_COLOR} from '../lib/appShell.js';
 
 const STORAGE_KEY = 'opioid-sim-theme';
 
@@ -19,7 +20,7 @@ export function useDarkMode() {
     document.documentElement.classList.toggle('dark', isDark);
     try { localStorage.setItem(STORAGE_KEY, isDark ? 'dark' : 'light'); } catch { /* Cosmetic preference is optional. */ }
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', isDark ? '#0f172a' : '#1e293b');
+    if (meta) meta.setAttribute('content', APP_CHROME_COLOR);
   }, [isDark]);
 
   return [isDark, setIsDark];

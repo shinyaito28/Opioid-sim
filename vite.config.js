@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import {APP_CHROME_COLOR,APP_SHELL_URL} from './src/lib/appShell.js';
 
 // Fetch a distinct HTML URL when updating an installed PWA's app shell.
-const appShellUrl = '/index.html?pwa-shell=viewport-safe-area-v2';
+const appShellUrl = APP_SHELL_URL;
 
 export default defineConfig({
   plugins: [
@@ -15,8 +16,8 @@ export default defineConfig({
         name: 'Anesthesia PK/PD Simulator',
         short_name: 'AnesthesiaSim',
         description: 'PK/PD simulator for opioids and sedatives — research/educational use only',
-        theme_color: '#1e293b',
-        background_color: '#f8fafc',
+        theme_color: APP_CHROME_COLOR,
+        background_color: APP_CHROME_COLOR,
         display: 'standalone',
         orientation: 'any',
         start_url: '/',

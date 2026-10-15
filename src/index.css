@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 html { -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+:root { --app-chrome:#1e293b; }
+html,body,#root { background:var(--app-chrome); }
 
 /* Glassmorphism surface for sticky bars / popovers */
 .glass {
@@ -16,7 +18,7 @@ html { -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 /* Reasonable defaults for dark mode body so areas without explicit dark: vars
    don't end up bright white. App.jsx still owns the page-level background. */
 .dark body {
-  background: #0f172a;
+  background: var(--app-chrome);
   color: #e2e8f0;
 }
 
@@ -146,7 +148,7 @@ button { touch-action: manipulation; }
 }
 
 /* Header wraps as a whole; its title is never ellipsized. */
-.app-topbar { position:sticky; top:0; z-index:30; color:#fff; background:#1e293b; padding:max(8px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) 8px max(12px,env(safe-area-inset-left)); box-shadow:0 2px 5px #0f172a22; }
+.app-topbar { position:sticky; top:0; z-index:30; color:#fff; background:var(--app-chrome); filter:none; backdrop-filter:none; -webkit-backdrop-filter:none; padding:calc(8px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right)) 8px max(12px,env(safe-area-inset-left)); box-shadow:0 2px 5px #0f172a22; }
 .topbar-inner { max-width:960px; margin:auto; display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; min-width:0; }
 .topbar-brand { display:flex; align-items:center; gap:8px; min-width:0; }
 .topbar-brand svg { color:#60a5fa; flex-shrink:0; }
@@ -221,3 +223,11 @@ button { touch-action: manipulation; }
   .input-anchor { scroll-margin-top:12px; }
   .simple-app .graph-model select,.simple-app .value-unit select { font-size:16px; }
 }
+
+/* Installed PWA: never scroll document pixels behind the system status bar.
+   The opaque root owns the safe-area strip; the complete header can still
+   scroll away inside the remaining viewport, preserving mobile screen space. */
+html[data-standalone="true"],html[data-standalone="true"] body { height:100%; overflow:hidden; overscroll-behavior:none; }
+html[data-standalone="true"] #root { position:fixed; left:var(--app-viewport-left,0px); top:var(--app-viewport-top,0px); width:var(--app-viewport-width,100%); height:var(--app-viewport-height,100dvh); overflow:hidden; }
+html[data-standalone="true"] .simple-app { position:absolute; inset:env(safe-area-inset-top,0px) 0 0; min-height:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior-y:none; -webkit-overflow-scrolling:touch; scroll-padding-block:12px; }
+html[data-standalone="true"] .app-topbar { padding-top:8px; }
