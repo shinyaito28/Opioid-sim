@@ -115,7 +115,7 @@ export default function App() {
     const s=direction==='undo'?history.current.undo():history.current.redo();latest.current=s;setState(s);setPatientDraft(s.patient);setMinute(s.entryMinute??minute);setInputError('');setCurrentScenarioId(null);};
   const saveScenario=(id=null,name=null)=>{
     const data=validateSimpleSnapshot(latest.current);delete data.savedScenarios;delete data.savedTraces;
-    const entry={id:id??newEventId(),name:name||state.drug+' '+start,timestamp:Date.now(),data};
+    const entry={id:id??newEventId(),name:name||t('entryDrug'+state.drug,{defaultValue:state.drug})+' '+start,timestamp:Date.now(),data};
     if(accept({savedScenarios:id?state.savedScenarios.map(s=>s.id===id?{...entry,name:s.name}:s):[entry,...state.savedScenarios]})){
       scenarioBaseline.current=caseFingerprint(latest.current);setCurrentScenarioId(entry.id);
     }
@@ -167,9 +167,9 @@ export default function App() {
         <button className="quiet-button" onClick={()=>setReferenceOpen(true)}>{t('viewLiteratureLabel')}</button>
         {params&&<dl className="parameter-list">{['V1','V2','V3','Cl','Q2','Q3','ke0'].map(k=><div key={k}><dt>{k}</dt><dd>{Number(params[k]).toPrecision(4)}</dd></div>)}</dl>}
         <div className="advanced-actions"><button className="quiet-button" onClick={exportData}>{t('simpleExport')}</button>
-          <label className="quiet-button">{t('simpleImport')}<input type="file" accept=".json,application/json" onChange={importBackup} className="backup-file"/></label>
+          <label className="quiet-button backup-import">{t('simpleImport')}<input type="file" accept=".json,application/json" aria-label={t('simpleImport')} onChange={importBackup} className="backup-file"/></label>
           <button className="quiet-button" onClick={restoreOriginal}>{t('simpleRestoreOriginal')}</button>
-          <button className="quiet-button" onClick={()=>accept({savedTraces:[...state.savedTraces,{id:newEventId(),name:state.drug+' · '+model,drug:state.drug,
+          <button className="quiet-button" onClick={()=>accept({savedTraces:[...state.savedTraces,{id:newEventId(),name:t('entryDrug'+state.drug,{defaultValue:state.drug})+' · '+model,drug:state.drug,
             color:DRUG_COLORS[state.drug].ce,calculationVersion:CALCULATION_VERSION,data:structuredClone(data)}]})}>{t('simpleSaveCurve')}</button></div>
         {!!state.savedTraces.length&&<label><input type="checkbox" checked={showTraces} onChange={e=>setShowTraces(e.target.checked)}/>{t('simpleShowCurves')} ({state.savedTraces.length})</label>}
         {legacyStreams(state.events,state.drug)&&<p>{t('simpleLegacyStreams')}</p>}

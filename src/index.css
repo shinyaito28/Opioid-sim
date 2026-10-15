@@ -1,6 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+html { -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 
 /* Glassmorphism surface for sticky bars / popovers */
 .glass {
@@ -24,9 +25,10 @@
 button { touch-action: manipulation; }
 
 /* The working input stays in normal document flow above the graph. */
-.simple-app { min-height:100dvh; background:#f8fafc; color:#0f172a; padding-bottom:max(3rem,env(safe-area-inset-bottom)); }
+.simple-app { min-height:100dvh; width:100%; min-width:0; background:#f8fafc; color:#0f172a; padding-bottom:max(3rem,env(safe-area-inset-bottom)); }
 .dark .simple-app { background:#020617; color:#e2e8f0; }
-.simple-main { max-width:960px; margin:auto; padding:16px max(12px,env(safe-area-inset-left)); display:grid; gap:14px; }
+.simple-main { width:100%; max-width:960px; min-width:0; margin:auto; padding:16px max(12px,env(safe-area-inset-right)) 16px max(12px,env(safe-area-inset-left)); display:grid; grid-template-columns:minmax(0,1fr); gap:14px; }
+.simple-main>*,.dose-panel>*,.graph-panel>*,.history-panel>*,.advanced-content>* { min-width:0; }
 .simple-app button,.simple-app select,.simple-app input { font:inherit; }
 .simple-app button { cursor:pointer; }
 .simple-app button:disabled { opacity:.4; cursor:default; }
@@ -42,14 +44,15 @@ button { touch-action: manipulation; }
 .drug-select { flex:1; min-width:160px; }
 .drug-select select { width:100%; font-size:18px; font-weight:650; }
 .edit-badge { display:flex; align-items:center; gap:8px; font-size:13px; color:#0369a1; }
-.clock-controls { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.clock-controls { display:flex; align-items:flex-start; gap:10px; flex-wrap:wrap; }
 .clock-part { display:grid; grid-template-columns:44px 44px; grid-template-rows:48px 44px; gap:4px; }
 .clock-part input { grid-row:1; grid-column:1/-1; width:92px; text-align:center; font-size:26px; font-variant-numeric:tabular-nums; padding:4px; }
 .clock-part .step-button:first-child { grid-row:2; grid-column:2; }
 .clock-part .step-button:last-child { grid-row:2; grid-column:1; }
-.step-button { min-width:44px; min-height:44px; border-radius:8px; background:#e2e8f0; color:#334155; font-size:20px!important; user-select:none; -webkit-user-select:none; }
+.step-button { min-width:44px; min-height:44px; border-radius:8px; background:#e2e8f0; color:#334155; font-size:20px!important; user-select:none; -webkit-user-select:none; touch-action:none; }
 .dark .step-button { background:#1e293b; color:#e2e8f0; }
-.clock-colon { font-size:26px; margin-bottom:46px; }
+.clock-colon { font-size:26px; padding-top:5px; }
+.clock-now { margin-top:0; }
 .day-offset { font-size:12px; color:#64748b; }
 .dose-tabs { display:grid; grid-template-columns:1fr 1fr; padding:4px; gap:4px; background:#e2e8f0; border-radius:12px; }
 .dark .dose-tabs { background:#1e293b; }
@@ -106,9 +109,10 @@ button { touch-action: manipulation; }
 .history-row { display:flex; gap:4px; align-items:stretch; border-top:1px solid #e2e8f0; }
 .dark .history-row { border-color:#334155; }
 .history-edit { flex:1; display:flex; gap:12px; align-items:center; text-align:left; min-height:64px; padding:10px 0; }
+.history-edit { min-width:0; }
 .history-clock { font-size:18px; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .history-clock small,.history-value small { display:block; font-size:11px; color:#64748b; }
-.history-value { flex:1; font-size:15px; }
+.history-value { flex:1; min-width:0; font-size:15px; overflow-wrap:anywhere; }
 .history-edit-label { color:#0369a1; font-size:12px; }
 .editing-row { background:#e0f2fe; }
 .dark .editing-row { background:#082f49; }
@@ -116,21 +120,104 @@ button { touch-action: manipulation; }
 .advanced-content { display:grid; gap:14px; font-size:13px; }
 .advanced-content select { display:block; width:100%; margin-top:6px; }
 .advanced-actions { display:flex; flex-wrap:wrap; gap:8px; }
-.parameter-list { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+.parameter-list { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; overflow-wrap:anywhere; }
 .parameter-list dt { color:#64748b; }
 .parameter-list dd { font-variant-numeric:tabular-nums; }
 .muted { color:#64748b; font-size:13px; }
-.simple-app .backup-file { display:block; width:100%; margin-top:8px; font-size:12px; }
+.muted,.input-status,.error-banner,.graph-context,.graph-band-note,.advanced-content { overflow-wrap:anywhere; }
+.backup-import { position:relative; cursor:pointer; }
+.simple-app .backup-file { position:absolute; width:1px; height:1px; min-height:0; padding:0; border:0; clip-path:inset(50%); overflow:hidden; }
+.backup-import:focus-within { outline:3px solid #38bdf8; outline-offset:2px; }
 .error-banner { border:1px solid #f59e0b; padding:12px; border-radius:10px; background:#fffbeb; color:#92400e; font-size:13px; }
 .simple-app header button { min-height:44px; }
-.simple-app header h1 { font-size:14px; }
 .simple-app .glass { max-width:calc(100vw - 24px); }
 @media (max-width:480px) {
   .simple-main { gap:10px; padding-top:10px; }
   .dose-panel,.graph-panel,.history-panel { padding:12px; }
   .dose-panel { gap:12px; }
   .graph-canvas { height:260px; }
-  .dose-actions { width:100%; flex-basis:100%; }
+  .dose-value { min-width:0; width:100%; flex-basis:100%; }
+  .dose-actions { min-width:0; width:auto; flex:1; }
+  .stop-button { flex:1; }
   .history-edit-label { display:none; }
-  .simple-app header h1 { max-width:150px; overflow:hidden; text-overflow:ellipsis; }
+  .clock-controls { gap:6px; }
+  .clock-now { padding-left:10px; padding-right:10px; }
+  .parameter-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+
+/* Header wraps as a whole; its title is never ellipsized. */
+.app-topbar { position:sticky; top:0; z-index:30; color:#fff; background:#1e293b; padding:max(8px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) 8px max(12px,env(safe-area-inset-left)); box-shadow:0 2px 5px #0f172a22; }
+.topbar-inner { max-width:960px; margin:auto; display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; min-width:0; }
+.topbar-brand { display:flex; align-items:center; gap:8px; min-width:0; }
+.topbar-brand svg { color:#60a5fa; flex-shrink:0; }
+.topbar-brand h1 { margin:0; font-size:16px; font-weight:700; line-height:1.4; white-space:normal; overflow-wrap:anywhere; }
+.topbar-tools { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:6px; flex:1 1 440px; min-width:0; }
+.topbar-button { display:inline-flex; align-items:center; justify-content:center; gap:5px; padding:6px 9px; border-radius:8px; min-height:44px; max-width:100%; background:#334155; color:#f1f5f9; font-size:12px!important; line-height:1.5; }
+.topbar-button svg { flex-shrink:0; }
+.topbar-button span { min-width:0; overflow-wrap:anywhere; }
+.patient-menu,.case-menu { min-width:0; }
+.patient-trigger { width:100%; }
+.patient-trigger span { flex:1; text-align:left; }
+.icon-button { width:44px; min-width:44px; padding:8px; }
+.topbar-language { display:flex; flex-shrink:0; background:#334155; border-radius:8px; padding:2px; }
+.topbar-language button { min-height:44px; min-width:44px; padding:6px 8px; border-radius:6px; font-size:12px; }
+.topbar-language [aria-pressed="true"] { background:#0369a1; }
+.topbar-saved { color:#6ee7b7; font-size:10px; }
+
+/* Dialogs live outside the header. The visible viewport excludes the iOS keyboard. */
+.dialog-backdrop { position:fixed; z-index:100; background:#0f172a99; box-sizing:border-box; padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); overscroll-behavior:contain; touch-action:pan-y; }
+.viewport-dialog { position:fixed; display:flex; flex-direction:column; min-width:0; min-height:0; box-sizing:border-box; border:1px solid #cbd5e1; border-radius:14px; overflow:hidden; background:#fff; color:#0f172a; box-shadow:0 12px 40px #02061755; overflow-wrap:anywhere; }
+.dark .viewport-dialog { background:#0f172a; color:#e2e8f0; border-color:#475569; }
+.dialog-heading { display:flex; flex-shrink:0; align-items:center; gap:8px; padding:8px 8px 8px 14px; border-bottom:1px solid #cbd5e1; }
+.dialog-heading h2 { flex:1; min-width:0; margin:0; font-size:16px; line-height:1.4; font-weight:700; }
+.dialog-close { display:flex; align-items:center; justify-content:center; width:44px; height:44px; flex:0 0 44px; border-radius:8px; cursor:pointer; }
+.dialog-content { min-height:0; min-width:0; padding:12px; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+.viewport-dialog button,.viewport-dialog input,.viewport-dialog select { font:inherit; }
+.viewport-dialog button,.viewport-dialog a,.viewport-dialog summary { touch-action:manipulation; }
+.viewport-dialog button { cursor:pointer; min-height:44px; }
+.viewport-dialog button:disabled { opacity:.4; cursor:default; }
+.viewport-dialog input:not([type="checkbox"]),.viewport-dialog select { width:100%; max-width:100%; min-width:0; min-height:48px; padding:8px 10px; border:1px solid #94a3b8; border-radius:8px; background:transparent; color:inherit; font-size:16px; }
+.viewport-dialog :is(button,input,select,summary,a):focus-visible { outline:3px solid #38bdf8; outline-offset:2px; }
+.viewport-dialog .quiet-button { display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+.case-save-form { display:grid; gap:10px; margin-bottom:12px; }
+.case-save-form label { display:grid; gap:5px; font-size:13px; }
+.case-overwrite { width:100%; margin-bottom:12px; }
+.saved-case-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:8px; border-top:1px solid #cbd5e1; padding:12px 0; }
+.saved-case-description { min-width:0; }
+.saved-case-description h3 { font-size:14px; font-weight:600; margin:0; }
+.case-meta,.case-current { font-size:12px; line-height:1.6; color:#64748b; }
+.case-current { color:#0369a1; }
+.saved-case-actions { display:flex; align-items:center; gap:4px; }
+.saved-case-actions .quiet-button { padding:8px; font-size:12px; }
+.case-delete { display:flex; align-items:center; justify-content:center; width:44px; min-width:44px; color:#64748b; }
+.patient-auto { display:flex; align-items:center; gap:8px; min-height:44px; font-size:14px; margin-bottom:8px; }
+.patient-auto input { width:18px; height:18px; accent-color:#0369a1; }
+.patient-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.patient-field { display:grid; align-content:start; min-width:0; gap:4px; font-size:13px; }
+.patient-field small { color:#64748b; font-size:11px; }
+.unused-field input,.unused-field select { border-style:dashed; }
+.patient-model-note { margin-top:12px; }
+.patient-done { width:100%; margin-top:16px; }
+.reference-content { display:grid; gap:16px; font-size:14px; line-height:1.7; }
+.reference-content h3 { font-weight:700; margin-bottom:6px; }
+.reference-content ul { padding-left:20px; list-style:disc; }
+.reference-citation { border:1px solid #cbd5e1; border-radius:9px; padding:10px; margin-top:8px; }
+.reference-citation h4 { font-size:13px; font-weight:600; }
+.reference-journal { font-size:12px; font-style:italic; }
+.reference-original summary { min-height:44px; display:flex; align-items:center; cursor:pointer; font-size:13px; color:#0369a1; }
+.reference-original p { font-size:13px; }
+.reference-links { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; font-size:12px; }
+.reference-links a { display:inline-flex; flex-wrap:wrap; align-items:center; gap:4px; min-height:44px; color:#0369a1; }
+.reference-warning { padding:10px; border:1px solid #f59e0b; border-radius:8px; color:#92400e; background:#fffbeb; }
+.dark .reference-links a,.dark .reference-original summary,.dark .case-current { color:#7dd3fc; }
+.dark .case-meta,.dark .patient-field small { color:#94a3b8; }
+@media (max-width:640px) {
+  .app-topbar { position:relative; }
+  .topbar-brand { flex-basis:100%; }
+  .topbar-brand h1 { font-size:15px; }
+  .topbar-tools { flex-basis:100%; justify-content:flex-start; }
+  .patient-menu { flex:1 1 150px; }
+  .topbar-saved { display:none; }
+  .input-anchor { scroll-margin-top:12px; }
+  .simple-app .graph-model select,.simple-app .value-unit select { font-size:16px; }
 }

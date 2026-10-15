@@ -8,6 +8,7 @@ import ja from './locales/ja.json';
 i18n.on('languageChanged', value => {
     const language = resolveSavedLanguage(value);
     document.documentElement.lang = language;
+    document.title = (language === 'ja' ? ja : en).appTitle;
     try { localStorage.setItem('i18nextLng', language); } catch { /* Language remains usable when storage is unavailable. */ }
 });
 

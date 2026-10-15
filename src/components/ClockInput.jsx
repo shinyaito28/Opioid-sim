@@ -59,7 +59,7 @@ export default function ClockInput({ minute, startTime, onChange, onPending, onN
           onBlur={()=>edit(hour,min,true)}/>
         <RepeatButton onStep={()=>step(-1)} label={t('simpleMinuteDown')}>−</RepeatButton>
       </div>
-      <button type="button" className="quiet-button" onClick={()=>{
+      <button type="button" className="quiet-button clock-now" onClick={()=>{
         const value=onNow();if(validEntryMinute(value)){const p=clockParts(value,startTime);
           setHour(p.hour);setMin(p.minute);latest.current=value;onPending(false);}
       }}>{t('now')}</button>
