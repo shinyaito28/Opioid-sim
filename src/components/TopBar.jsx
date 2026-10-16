@@ -1,11 +1,22 @@
+import {useEffect,useLayoutEffect,useRef} from 'react';
 import {Activity,Eye,EyeOff,Sun,Moon} from 'lucide-react';
 import PatientChip from './PatientChip';
 import ScenarioMenu from './ScenarioMenu';
+const useHeaderLayoutEffect=typeof window==='undefined'?useEffect:useLayoutEffect;
 
 export default function TopBar({t,i18n,showRanges,setShowRanges,patient,setPatient,onPatientComplete,autoFillStats,setAutoFillStats,activeParams,
   savedScenarios,saveScenario,loadScenario,deleteScenario,currentScenarioId,isModified,lastSavedAt,isDark,setIsDark}) {
   const savedLabel=lastSavedAt?new Date(lastSavedAt).toLocaleTimeString(i18n.language,{hour:'2-digit',minute:'2-digit'}):null;
-  return <header className="app-topbar"><div className="topbar-inner">
+  const header=useRef(null);
+  useHeaderLayoutEffect(()=>{
+    // Measure actual wrapping/font/safe-area changes; never guess a notch or title height.
+    const root=document.documentElement,measure=()=>root.style.setProperty('--app-header-height',header.current.getBoundingClientRect().height+'px');
+    measure();
+    const observer=typeof ResizeObserver==='undefined'?null:new ResizeObserver(measure);
+    observer?.observe(header.current,{box:'border-box'});window.addEventListener('resize',measure);
+    return()=>{observer?.disconnect();window.removeEventListener('resize',measure);root.style.removeProperty('--app-header-height');};
+  },[]);
+  return <header ref={header} className="app-topbar"><div className="topbar-inner">
     <div className="topbar-brand"><Activity size={20} aria-hidden="true"/><h1>{t('appTitle')}</h1></div>
     <div className="topbar-tools">
       <PatientChip patient={patient} setPatient={setPatient} onComplete={onPatientComplete} autoFillStats={autoFillStats}

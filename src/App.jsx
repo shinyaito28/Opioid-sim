@@ -147,7 +147,7 @@ export default function App() {
     catch{setInputError('savedStateInvalid');}
   };
   const visibleTraces=showTraces?state.savedTraces.filter(tr=>tr.drug===state.drug&&tr.calculationVersion===CALCULATION_VERSION):[];
-  return <div className="simple-app">
+  return <div className="app-shell">
     <TopBar t={t} i18n={i18n} showRanges={showRanges} setShowRanges={setShowRanges} patient={patientDraft} setPatient={updatePatient}
       onPatientComplete={completePatient} autoFillStats={state.autoFillStats} setAutoFillStats={value=>{
         const patient=value?{...state.patient,...estimateGrowth(state.patient.age,state.patient.gender)}:state.patient;
@@ -157,7 +157,7 @@ export default function App() {
       loadScenario={loadScenario} deleteScenario={id=>{if(accept({savedScenarios:state.savedScenarios.filter(s=>s.id!==id)})&&id===currentScenarioId)setCurrentScenarioId(null);}}
       currentScenarioId={currentScenarioId} isModified={currentScenarioId!=null&&caseFingerprint(state)!==scenarioBaseline.current}
       lastSavedAt={lastSavedAt} isDark={isDark} setIsDark={setIsDark}/>
-    <main className="simple-main">
+    <div className="simple-app"><main className="simple-main">
       {(inputError||storageError)&&<div role="alert" className="error-banner">{[inputError,storageError].filter(Boolean).map(key=><p key={key}>{t(key)}</p>)}</div>}
       <div ref={panelRef} className="input-anchor">
         <div className="case-workflow"><button type="button" className="quiet-button new-case-button" data-testid="new-case" disabled={!storageReady||!!storageError} onClick={newCase}>{t('simpleNewCase')}</button>
@@ -196,6 +196,6 @@ export default function App() {
         <p className="muted">{t('simpleStorageNote')}</p>
       </div></details>
       <TherapeuticReferenceModal open={referenceOpen} onClose={()=>setReferenceOpen(false)} drug={state.drug} t={t}/>
-    </main>
+    </main></div>
   </div>;
 }

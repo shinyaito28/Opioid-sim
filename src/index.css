@@ -27,15 +27,17 @@ html,body,#root { background:var(--app-chrome); }
 button { touch-action: manipulation; }
 
 /* The working input stays in normal document flow above the graph. */
-.simple-app { min-height:100dvh; width:100%; min-width:0; background:#f8fafc; color:#0f172a; padding-bottom:max(3rem,env(safe-area-inset-bottom)); }
+.app-shell { min-height:100dvh; background:#f8fafc; color:#0f172a; }
+.dark .app-shell { background:#020617; color:#e2e8f0; }
+.simple-app { width:100%; min-width:0; background:#f8fafc; color:#0f172a; padding-bottom:max(3rem,env(safe-area-inset-bottom)); }
 .dark .simple-app { background:#020617; color:#e2e8f0; }
 .simple-main { width:100%; max-width:960px; min-width:0; margin:auto; padding:16px max(12px,env(safe-area-inset-right)) 16px max(12px,env(safe-area-inset-left)); display:grid; grid-template-columns:minmax(0,1fr); gap:14px; }
 .simple-main>*,.dose-panel>*,.graph-panel>*,.history-panel>*,.advanced-content>* { min-width:0; }
-.simple-app button,.simple-app select,.simple-app input { font:inherit; }
-.simple-app button { cursor:pointer; }
-.simple-app button:disabled { opacity:.4; cursor:default; }
+.app-shell button,.app-shell select,.app-shell input { font:inherit; }
+.app-shell button { cursor:pointer; }
+.app-shell button:disabled { opacity:.4; cursor:default; }
 .simple-app input,.simple-app select { color:inherit; background:transparent; border:1px solid #94a3b8; border-radius:9px; min-height:48px; padding:8px 10px; font-size:16px; }
-.simple-app input:focus,.simple-app select:focus,.simple-app button:focus-visible,.simple-app summary:focus-visible { outline:3px solid #38bdf8; outline-offset:2px; }
+.simple-app input:focus,.simple-app select:focus,.app-shell button:focus-visible,.simple-app summary:focus-visible { outline:3px solid #38bdf8; outline-offset:2px; }
 .dose-panel,.graph-panel,.history-panel,.advanced-panel { border:1px solid #cbd5e1; border-radius:16px; background:#fff; padding:16px; }
 .dark .dose-panel,.dark .graph-panel,.dark .history-panel,.dark .advanced-panel { background:#0f172a; border-color:#334155; }
 .input-anchor { scroll-margin-top:140px; }
@@ -224,13 +226,15 @@ button { touch-action: manipulation; }
   .simple-app .graph-model select,.simple-app .value-unit select { font-size:16px; }
 }
 
-/* Installed PWA: never scroll document pixels behind the system status bar.
-   The opaque root owns the safe-area strip; the complete header can still
-   scroll away inside the remaining viewport, preserving mobile screen space. */
+/* Installed PWA: a real, opaque fixed header owns the top viewport edge.
+   Keep it outside the momentum scroller so its title is not scroll-edge content.
+   Header height includes the safe area once and follows wrapping/rotation/fonts. */
 html[data-standalone="true"],html[data-standalone="true"] body { height:100%; overflow:hidden; overscroll-behavior:none; }
 html[data-standalone="true"] #root { position:fixed; left:var(--app-viewport-left,0px); top:var(--app-viewport-top,0px); width:var(--app-viewport-width,100%); height:var(--app-viewport-height,100dvh); overflow:hidden; }
-html[data-standalone="true"] .simple-app { position:absolute; inset:env(safe-area-inset-top,0px) 0 0; min-height:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior-y:none; -webkit-overflow-scrolling:touch; scroll-padding-block:12px; }
-html[data-standalone="true"] .app-topbar { padding-top:8px; }
+html[data-standalone="true"] .app-shell { min-height:0; height:100%; background:var(--app-chrome); }
+html[data-standalone="true"] .simple-app { position:absolute; inset:var(--app-header-height,0px) 0 0; min-height:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior-y:none; -webkit-overflow-scrolling:touch; scroll-padding-block:12px; }
+html[data-standalone="true"] .app-topbar { position:fixed; left:var(--app-viewport-left,0px); top:var(--app-viewport-top,0px); width:var(--app-viewport-width,100%); padding-top:calc(8px + env(safe-area-inset-top,0px)); }
+html[data-standalone="true"] .input-anchor { scroll-margin-top:12px; }
 
 /* Prototype: the graph keeps the entire content width. Editing lives below it. */
 .case-workflow { display:flex; align-items:center; flex-wrap:wrap; gap:6px 12px; margin-bottom:8px; }
