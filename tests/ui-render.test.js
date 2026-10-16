@@ -7,8 +7,9 @@ import i18next from 'i18next';
 import {I18nextProvider,initReactI18next} from 'react-i18next';
 import {createServer} from 'vite';
 import react from '@vitejs/plugin-react';
+import {doseMarkers} from '../src/lib/doseMarkers.js';
 
-let server,App,ViewportDialog,SavedCaseList,PatientFields;
+let server,App,ViewportDialog,SavedCaseList,PatientFields,DoseMarkerValues;
 const en=JSON.parse(fs.readFileSync(new URL('../src/locales/en.json',import.meta.url)));
 const ja=JSON.parse(fs.readFileSync(new URL('../src/locales/ja.json',import.meta.url)));
 before(async()=>{
@@ -17,6 +18,25 @@ before(async()=>{
   ViewportDialog=(await server.ssrLoadModule('/src/components/ViewportDialog.jsx')).default;
   SavedCaseList=(await server.ssrLoadModule('/src/components/ScenarioMenu.jsx')).SavedCaseList;
   PatientFields=(await server.ssrLoadModule('/src/components/PatientChip.jsx')).PatientFields;
+  DoseMarkerValues=(await server.ssrLoadModule('/src/components/DoseMarkerValues.jsx')).default;
+});
+
+for(const language of ['en','ja'])test(language+': marker amounts, rates and stop values render without hovering or selecting',async()=>{
+  const i18n=i18next.createInstance();await i18n.init({lng:language,resources:{en:{translation:en},ja:{translation:ja}},interpolation:{escapeValue:false}});
+  const events=[{id:'b',drug:'Fentanyl',type:'bolus',time:0,amount:25},
+    {id:'start',drug:'Fentanyl',type:'infusion',time:0,rate:70,originalUnit:'mcg/kg/hr',duration:10,isInfinite:false,uiSingle:true},
+    {id:'change',drug:'Fentanyl',type:'infusion',time:10,rate:140,originalUnit:'mcg/kg/hr',duration:10,isInfinite:false,uiSingle:true},
+    {id:'stop',drug:'Fentanyl',type:'infusion',time:20,rate:0,originalUnit:'mcg/kg/hr',duration:60,isInfinite:true,uiSingle:true}];
+  const groups=doseMarkers(events,'Fentanyl',{start:0,end:30},300,5),t=i18n.t.bind(i18n);
+  const html=renderToString(React.createElement(DoseMarkerValues,{groups,events,weight:70,startTime:'23:50',color:'#2563eb',t}));
+  for(const value of ['25 mcg','1 mcg/kg/hr','2 mcg/kg/hr','0 mcg/kg/hr'])assert(html.includes('>'+value+'</strong>'),value);
+  for(const key of ['markerBolus','markerStart','markerChange','markerStop'])assert(html.includes(t(key)));
+  assert(html.includes(t('entryDrugFentanyl')));assert(html.includes('border-color:#2563eb'));
+  assert.equal((html.match(/class="marker-numeric"/g)||[]).length,4);
+  assert(html.includes('#1'));assert(html.includes('00:00 (+1d)'));assert(!html.includes('<details'));assert(!html.includes('hidden'));
+  const dense=Array.from({length:100},(_,index)=>({...events[0],id:'dense-'+index,amount:index+1}));
+  const denseHTML=renderToString(React.createElement(DoseMarkerValues,{groups:doseMarkers(dense,'Fentanyl',{start:0,end:30},270),events:dense,weight:70,startTime:'09:00',color:'#2563eb',t}));
+  assert.equal((denseHTML.match(/class="marker-numeric"/g)||[]).length,100);assert(denseHTML.includes('>100 mcg</strong>'));
 });
 after(async()=>{await server?.close();});
 for(const language of ['en','ja'])test(language+': complete UI renders with one clock, common tabs, and no old status/preset controls',async()=>{

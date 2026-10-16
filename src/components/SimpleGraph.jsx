@@ -5,6 +5,7 @@ import { graphContext,graphDisplayRange } from '../lib/graphContext.js';
 import { DRUG_DISPLAY,DRUG_COLORS,AVAILABLE_MODELS } from '../lib/drugs.js';
 import {concentrationBand,suggestedYAxisMax,yAxisSlider,yAxisFromSlider} from '../lib/graphScale.js';
 import {doseMarkers,eventDescription,markerClock} from '../lib/doseMarkers.js';
+import DoseMarkerValues from './DoseMarkerValues';
 
 export default function SimpleGraph({data,drug,startTime,currentMinute,range,onRange,showRanges,thresholds,savedTraces,
   events,model,modelChoice,onModelChoice,patient,onSelectEvent,children,t}) {
@@ -67,7 +68,7 @@ export default function SimpleGraph({data,drug,startTime,currentMinute,range,onR
     {!!markers.length&&<div className="dose-marker-lane" data-testid="dose-marker-lane">
       <svg viewBox={'0 0 '+chartWidth+' 44'} width="100%" height="44" role="group" aria-label={t('markerLane')}>
         <line x1="48" x2={Math.max(48,chartWidth-16)} y1="2" y2="2" stroke="#cbd5e1"/>
-        {markers.map(group=><g key={group.id} className={'dose-marker '+(group.future?'future-marker':'')} data-marker-time={group.time}
+        {markers.map((group,index)=><g key={group.id} className={'dose-marker '+(group.future?'future-marker':'')} data-marker-time={group.time}
           tabIndex="0" role="button" aria-label={group.events.map(event=>markerClock(event.time,startTime)+' '+eventDescription(event,events,patient?.weight??1,t)).join('; ')}
           onClick={()=>selectMarker(group)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();selectMarker(group);}}}>
           <title>{group.events.map(event=>markerClock(event.time,startTime)+' '+eventDescription(event,events,patient?.weight??1,t)).join('\n')}</title>
@@ -75,9 +76,11 @@ export default function SimpleGraph({data,drug,startTime,currentMinute,range,onR
           {group.times.map(time=><line key={time} x1={markerX(time)} x2={markerX(time)} y1="0" y2="7" stroke="#64748b"/>)}
           <path d={'M'+(markerX(group.time)-5)+',12 L'+(markerX(group.time)+5)+',12 L'+markerX(group.time)+',20 Z'}
             fill={group.future?'none':'#64748b'} stroke="#64748b"/>
-          {group.events.length>1&&<text x={markerX(group.time)+8} y="21" fontSize="10" fill="#64748b">{group.events.length}</text>}
+          {group.events.length>1&&<text x={markerX(group.time)+8} y="21" fontSize="10" fill="#64748b">×{group.events.length}</text>}
+          <text x={markerX(group.time)} y="36" textAnchor="middle" fontSize="10" fill="#64748b">{'#'+(index+1)}</text>
         </g>)}
       </svg>
+      <DoseMarkerValues groups={markers} events={events} weight={patient?.weight??1} startTime={startTime} color={colors.ce} t={t}/>
       <p className="marker-help">{t('markerHint')}</p>
       {selected&&<div className="marker-inspector" aria-live="polite">{selected.events.map(event=><button type="button" className="marker-detail" key={event.id}
         onClick={()=>{const source=events.find(item=>item.id===event.sourceId);if(source)onSelectEvent?.(source);}}>

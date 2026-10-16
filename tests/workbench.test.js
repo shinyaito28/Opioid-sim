@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {doseMarkers,eventDescription,infusionKind,markerClock} from '../src/lib/doseMarkers.js';
+import {doseMarkers,eventDescription,eventDoseValue,infusionKind,markerClock} from '../src/lib/doseMarkers.js';
 import {newCaseWithArchive} from '../src/lib/caseDraft.js';
 import {createUndoHistory} from '../src/lib/undo.js';
 import {validateSimpleSnapshot,writeSimpleStorage,readSimpleStorage,SIMPLE_KEY} from '../src/lib/simpleStorage.js';
-import {DRUG_LIST,getDoseUnitForDrug} from '../src/lib/drugs.js';
+import {DRUG_LIST,DRUG_UNITS,getDoseUnitForDrug,convertToStandardUnit} from '../src/lib/drugs.js';
 import {CALCULATION_VERSION} from '../src/lib/state.js';
 const en=JSON.parse(fs.readFileSync(new URL('../src/locales/en.json',import.meta.url)));
 const t=(key,options={})=>en[key]??options.defaultValue??key;
@@ -51,6 +51,23 @@ test('markers retain absolute and weight-normalized rate display across all drug
   assert.match(eventDescription(event,[event],70,t),/1 mcg\/kg\/hr$/);
   assert.match(eventDescription(event,[event],35,t),/2 mcg\/kg\/hr$/);
   assert.equal(markerClock(-1,'00:00'),'23:59 (-1d)');assert.equal(markerClock(20,'23:50'),'00:10 (+1d)');
+});
+
+test('persistent marker values retain each supported rate unit and never substitute accumulated dose',()=>{
+  for(const drug of DRUG_LIST)for(const unit of DRUG_UNITS[drug]){
+    const event={...infusion('rate',0,convertToStandardUnit(2,unit,70,drug)),drug,originalUnit:unit,duration:30};
+    assert.deepEqual(eventDoseValue(event,[event],70),{kind:'start',value:'2 '+unit},drug+' '+unit);
+    const stop={...event,rate:0};assert.deepEqual(eventDoseValue(stop,[stop],70),{kind:'stop',value:'0 '+unit});
+  }
+});
+
+test('persistent marker values distinguish simultaneous bolus amount, infusion start, change and end',()=>{
+  const b=bolus('b',0,'Fentanyl',25),start=infusion('s',0,70,{originalUnit:'mcg/kg/hr'}),change=infusion('c',10,140,{originalUnit:'mcg/kg/hr'});
+  const events=[b,start,change];
+  assert.deepEqual(eventDoseValue(b,events,70),{kind:'bolus',value:'25 mcg'});
+  assert.deepEqual(eventDoseValue(start,events,70),{kind:'start',value:'1 mcg/kg/hr'});
+  assert.deepEqual(eventDoseValue(change,events,70),{kind:'change',value:'2 mcg/kg/hr'});
+  assert.deepEqual(eventDoseValue({...change,rate:0,markerKind:'end'},events,70),{kind:'end',value:'0 mcg/kg/hr'});
 });
 
 test('New Case archives the current case, keeps the existing library and traces, and survives reload',()=>{

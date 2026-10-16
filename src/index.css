@@ -242,6 +242,18 @@ html[data-standalone="true"] .app-topbar { padding-top:8px; }
 .dose-marker { cursor:pointer; outline:none; }
 .dose-marker:focus-visible path { stroke:#0284c7; stroke-width:3; }
 .marker-help { margin:-2px 0 8px; color:#64748b; font-size:11px; }
+.marker-values { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,128px),1fr)); align-items:start; gap:5px 10px; margin:0 0 7px; font-size:11px; line-height:1.5; }
+.marker-value-group { min-width:0; padding-left:6px; border-left:2px solid; }
+.marker-value-heading { display:flex; align-items:baseline; flex-wrap:wrap; gap:2px 5px; color:#475569; }
+.marker-value-heading>span { font-variant-numeric:tabular-nums; color:#64748b; }
+.marker-value-row { display:grid; grid-template-columns:34px minmax(0,1fr); gap:3px; color:#475569; }
+.marker-value-row time { font-variant-numeric:tabular-nums; font-size:10px; }
+.marker-value-kind { color:#64748b; }
+.marker-numeric { font-variant-numeric:tabular-nums; font-weight:600; color:#334155; }
+.marker-value-group,.marker-value-row>span { overflow-wrap:anywhere; }
+.dark .marker-value-heading,.dark .marker-value-row { color:#cbd5e1; }
+.dark .marker-numeric { color:#e2e8f0; }
+.dark .marker-value-kind,.dark .marker-value-heading>span { color:#94a3b8; }
 .marker-inspector { max-height:124px; overflow:auto; margin:4px 0 10px; border:1px solid #cbd5e1; border-radius:8px; }
 .marker-detail { display:block; text-align:left; width:100%; min-height:44px; padding:6px 10px; font-size:12px!important; border-bottom:1px solid #e2e8f0; }
 .marker-detail strong { margin-right:6px; font-variant-numeric:tabular-nums; }

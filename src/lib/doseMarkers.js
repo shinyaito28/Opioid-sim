@@ -9,11 +9,16 @@ export function infusionKind(event,events) {
   return previous?.rate>0&&(previous.isInfinite||previous.time+previous.duration>=event.time)?'change':'start';
 }
 
-export function eventDescription(event,events,weight,t) {
-  const drug=t('entryDrug'+event.drug,{defaultValue:event.drug});
+export function eventDoseValue(event,events,weight) {
   const kind=event.markerKind??(event.type==='bolus'?'bolus':infusionKind(event,events));
   const value=event.type==='bolus'?Number(event.amount.toPrecision(6))+' '+getDoseUnitForDrug(event.drug):
     infusionText(event,weight);
+  return {kind,value};
+}
+
+export function eventDescription(event,events,weight,t) {
+  const drug=t('entryDrug'+event.drug,{defaultValue:event.drug});
+  const {kind,value}=eventDoseValue(event,events,weight);
   return drug+' · '+t('marker'+kind[0].toUpperCase()+kind.slice(1))+' · '+value;
 }
 
