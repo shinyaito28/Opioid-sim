@@ -26,6 +26,9 @@ for(const language of ['en','ja'])test(language+': complete UI renders with one 
   assert.equal((html.match(/data-testid="shared-clock"/g)||[]).length,1);
   assert.equal((html.match(/role="tab"/g)||[]).length,2);
   assert(html.includes('data-testid="dose-add"'));assert(html.includes('data-testid="simple-graph"'));
+  assert(html.indexOf('data-testid="new-case"')<html.indexOf('data-testid="simple-dose-panel"'));
+  assert(html.indexOf('data-testid="simple-history"')>html.indexOf('class="graph-canvas"'));
+  if(language==='en')assert(/data-testid="language-ja"[^>]*>JP<\/button>/.test(html));
   assert(html.includes('data-testid="graph-model"'));assert(html.includes('data-testid="graph-used-model"'));
   assert(html.includes('data-testid="graph-time-context"'));assert(html.includes('value="auto" selected'));
   assert(html.includes('data-testid="graph-y-controls"'));assert(html.includes('data-testid="graph-band-note"'));

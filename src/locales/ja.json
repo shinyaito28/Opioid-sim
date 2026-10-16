@@ -321,5 +321,22 @@
   "referenceConfidence": "出典の確認度：{{level}}",
   "confidenceSOLID": "高い",
   "confidenceMODERATE": "中程度",
-  "confidenceWEAK": "限定的"
+  "confidenceWEAK": "限定的",
+  "newCaseHint": "現在の症例は保存済み症例に残してから、新しく開始します。",
+  "caseBeforeNew": "新規開始前 · {{time}}",
+  "caseStartedSafely": "新しい症例を開始しました。前の症例は保存済み症例から開けます。「元に戻す」も使えます。",
+  "quickEditTime": "投与時刻を編集",
+  "quickEditValue": "投与量・速度を編集",
+  "quickEditUnit": "投与速度の単位を編集",
+  "historyAll": "全{{count}}件",
+  "historyLess": "直近の投与",
+  "markerLane": "グラフ下の投与時刻",
+  "markerHint": "▼ 投与時刻・白抜きは未来の時刻・数字はまとめた件数。選ぶと詳細と編集欄が開きます。",
+  "markerBolus": "単回投与",
+  "markerStart": "持続開始",
+  "markerChange": "速度変更",
+  "markerStop": "停止",
+  "markerEnd": "持続終了",
+  "markerFuture": "未来の時刻",
+  "markerEarlier": "現在以前"
 }

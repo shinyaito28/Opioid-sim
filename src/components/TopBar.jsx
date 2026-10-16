@@ -15,7 +15,7 @@ export default function TopBar({t,i18n,showRanges,setShowRanges,patient,setPatie
       {savedLabel&&<span className="topbar-saved" title={t('autoSavedTooltip')}>{t('autoSavedAt',{time:savedLabel})}</span>}
       <div className="topbar-language" role="group" aria-label={t('language')}>
         <button type="button" onClick={()=>i18n.changeLanguage('en')} data-testid="language-en" aria-pressed={i18n.language==='en'} lang="en">EN</button>
-        <button type="button" onClick={()=>i18n.changeLanguage('ja')} data-testid="language-ja" aria-pressed={i18n.language==='ja'} lang="ja">日本語</button>
+        <button type="button" onClick={()=>i18n.changeLanguage('ja')} data-testid="language-ja" aria-label="日本語 / Japanese" aria-pressed={i18n.language==='ja'} lang="ja">{i18n.language.startsWith('en')?'JP':'日本語'}</button>
       </div>
       <button type="button" className="topbar-button icon-button" onClick={()=>setIsDark(value=>!value)} title={t(isDark?'lightMode':'darkMode')}
         aria-label={t(isDark?'lightMode':'darkMode')}>{isDark?<Sun size={18}/>:<Moon size={18}/>}</button>

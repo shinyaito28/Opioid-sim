@@ -231,3 +231,85 @@ html[data-standalone="true"],html[data-standalone="true"] body { height:100%; ov
 html[data-standalone="true"] #root { position:fixed; left:var(--app-viewport-left,0px); top:var(--app-viewport-top,0px); width:var(--app-viewport-width,100%); height:var(--app-viewport-height,100dvh); overflow:hidden; }
 html[data-standalone="true"] .simple-app { position:absolute; inset:env(safe-area-inset-top,0px) 0 0; min-height:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior-y:none; -webkit-overflow-scrolling:touch; scroll-padding-block:12px; }
 html[data-standalone="true"] .app-topbar { padding-top:8px; }
+
+/* Prototype: the graph keeps the entire content width. Editing lives below it. */
+.case-workflow { display:flex; align-items:center; flex-wrap:wrap; gap:6px 12px; margin-bottom:8px; }
+.case-workflow>.muted { flex:1; min-width:150px; font-size:12px; }
+.case-workflow .undo-strip { margin-left:auto; }
+.new-case-button { border:1px solid #94a3b8; }
+.dose-marker-lane { min-width:0; }
+.dose-marker-lane svg { display:block; overflow:visible; }
+.dose-marker { cursor:pointer; outline:none; }
+.dose-marker:focus-visible path { stroke:#0284c7; stroke-width:3; }
+.marker-help { margin:-2px 0 8px; color:#64748b; font-size:11px; }
+.marker-inspector { max-height:124px; overflow:auto; margin:4px 0 10px; border:1px solid #cbd5e1; border-radius:8px; }
+.marker-detail { display:block; text-align:left; width:100%; min-height:44px; padding:6px 10px; font-size:12px!important; border-bottom:1px solid #e2e8f0; }
+.marker-detail strong { margin-right:6px; font-variant-numeric:tabular-nums; }
+.marker-detail small { color:#64748b; margin-left:8px; }
+.quick-history { padding:10px 0 0; border:0; border-top:1px solid #cbd5e1; border-radius:0; margin-top:4px; }
+.history-heading { display:flex; justify-content:space-between; gap:8px; align-items:center; }
+.history-heading h2 { font-size:13px; margin:0; }
+.history-heading h2 small { color:#64748b; font-weight:400; }
+.history-heading .quiet-button { font-size:12px; padding:5px 8px; }
+.history-compact-list { max-height:150px; overflow:auto; overscroll-behavior:contain; margin-top:4px; }
+.quick-history .history-row { min-width:0; }
+.quick-history .history-edit { min-height:44px; padding:5px 0; gap:10px; }
+.quick-history .history-clock { font-size:13px; min-width:52px; }
+.quick-history .history-value { font-size:12px; }
+.quick-history .history-edit-label { font-size:11px; }
+.quick-history .delete-button { min-height:44px; }
+.quick-edit-title { font-size:12px; color:#0369a1; margin-top:6px; }
+.quick-editor-anchor { margin:4px 0 8px; padding:8px 10px; border:1px solid #7dd3fc; border-radius:10px; background:#f0f9ff; }
+.inline-edit-fields { display:flex; align-items:end; flex-wrap:wrap; gap:8px; }
+.inline-edit-fields label { min-width:0; width:150px; }
+.inline-edit-fields .field-label { margin-bottom:3px; }
+.simple-app .inline-edit-fields input,.simple-app .inline-edit-fields select { min-height:44px; width:100%; min-width:0; padding:5px 8px; font-size:16px; }
+.inline-dose-unit { align-self:end; padding:10px 0; font-size:13px; }
+.inline-edit-footer { display:flex; align-items:center; gap:8px; justify-content:space-between; font-size:11px; color:#64748b; }
+.inline-edit-footer .quiet-button { font-size:12px; padding:6px 10px; }
+.axis-controls { display:grid; grid-template-columns:1fr 1fr; gap:0 18px; }
+.axis-controls .range-details { grid-column:1/-1; margin-top:0; }
+.dark .quick-editor-anchor { background:#082f49; border-color:#075985; }
+.dark .quick-edit-title { color:#7dd3fc; }
+.dark .marker-help,.dark .marker-detail small { color:#94a3b8; }
+@media (min-width:1000px) {
+  .simple-main,.topbar-inner { max-width:1200px; }
+  .simple-main { gap:10px; }
+  .dose-panel { grid-template-columns:minmax(180px,.9fr) 272px minmax(260px,1.2fr); gap:6px 20px; padding:12px; align-items:start; }
+  .dose-heading { grid-column:1; grid-row:1; }
+  .dose-tabs { grid-column:1; grid-row:2; padding:2px; }
+  .clock-block { grid-column:2; grid-row:1/3; }
+  .dose-fields { grid-column:3; grid-row:1/3; gap:8px; }
+  .dose-fields .dose-value { min-width:120px; }
+  .dose-fields .dose-actions { min-width:110px; flex-basis:100%; }
+  .dose-fields .primary-button,.dose-fields .stop-button { min-height:40px; padding:6px 10px; }
+  .dose-panel .drug-select select { min-height:40px; padding:5px 8px; font-size:16px; }
+  .dose-panel .dose-tabs button { min-height:36px; font-size:13px; }
+  .dose-panel .value-unit input { font-size:20px; min-height:40px; padding:5px 8px; }
+  .dose-panel .field-label { margin-bottom:3px; }
+  .dose-panel .input-status { grid-column:1/-1; min-height:0; }
+  .dose-panel .input-status:empty { display:none; }
+  .graph-panel { padding:12px 16px; }
+  .graph-context { display:flex; flex-wrap:wrap; gap:0 14px; }
+  .graph-canvas { height:320px; }
+  .inline-event-editor { display:flex; align-items:end; gap:16px; }
+  .inline-edit-fields { flex:1; }
+  .inline-edit-footer { flex:1; min-width:160px; }
+  .history-compact-list { max-height:140px; }
+}
+@media (max-width:640px) {
+  .case-workflow { gap:6px; }
+  .case-workflow>.muted { flex-basis:calc(100% - 120px); min-width:0; }
+  .case-workflow .undo-strip { width:100%; }
+  .quick-editor-anchor { padding:8px; }
+  .inline-edit-fields label { flex:1; width:auto; }
+  .inline-edit-fields .inline-unit { flex-basis:100%; }
+  .inline-edit-fields input[type="time"] { min-width:0; }
+  .quick-history .history-value { font-size:11px; }
+  .quick-history .history-edit { gap:6px; }
+  .marker-detail { overflow-wrap:anywhere; }
+  .axis-controls { gap:0 12px; }
+  .graph-y-controls { gap:6px; }
+  .graph-y-controls .field-label { flex-wrap:wrap; gap:0; }
+  .graph-y-controls button { padding:6px 8px; }
+}

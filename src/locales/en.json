@@ -322,5 +322,22 @@
   "entryDrugMethadone": "Methadone",
   "entryDrugSufentanil": "Sufentanil",
   "entryDrugKetamine": "Ketamine (S-ketamine)",
-  "entryDrugDexmedetomidine": "Dexmedetomidine"
+  "entryDrugDexmedetomidine": "Dexmedetomidine",
+  "newCaseHint": "Your current case is kept in Saved Cases before starting again.",
+  "caseBeforeNew": "Before New Case · {{time}}",
+  "caseStartedSafely": "New case started. Previous case kept in Saved Cases; Undo is available.",
+  "quickEditTime": "Edit event time",
+  "quickEditValue": "Edit dose or rate",
+  "quickEditUnit": "Edit rate unit",
+  "historyAll": "All {{count}} events",
+  "historyLess": "Recent events",
+  "markerLane": "Dose times below the chart",
+  "markerHint": "▼ Dose time · outline: future time · number: grouped events. Select to inspect or edit.",
+  "markerBolus": "Bolus",
+  "markerStart": "Infusion start",
+  "markerChange": "Rate change",
+  "markerStop": "Stop",
+  "markerEnd": "Infusion end",
+  "markerFuture": "Future time",
+  "markerEarlier": "Earlier / now"
 }

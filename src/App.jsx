@@ -18,6 +18,7 @@ import {useDarkMode} from './hooks/useDarkMode';
 import {estimateGrowth} from './lib/growth.js';
 import {graphSampleStart} from './lib/graphContext.js';
 import {scrollApplicationBy} from './lib/appViewport.js';
+import {newCaseWithArchive} from './lib/caseDraft.js';
 
 function freshCase() {
   const now=new Date(),start=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
@@ -47,7 +48,7 @@ export default function App() {
   const [storageReady,setStorageReady]=useState(false),[storageError,setStorageError]=useState(''),[inputError,setInputError]=useState('');
   const [now,setNow]=useState(()=>new Date()),[minute,setMinute]=useState(0),[editing,setEditing]=useState(null),[editSession,setEditSession]=useState(0);
   const [showRanges,setShowRanges]=useState(true),[referenceOpen,setReferenceOpen]=useState(false),[showTraces,setShowTraces]=useState(false);
-  const [currentScenarioId,setCurrentScenarioId]=useState(null),[lastSavedAt,setLastSavedAt]=useState(null);
+  const [currentScenarioId,setCurrentScenarioId]=useState(null),[lastSavedAt,setLastSavedAt]=useState(null),[caseNotice,setCaseNotice]=useState(false);
   const [isDark,setIsDark]=useDarkMode();
   const history=useRef(createUndoHistory(state)),latest=useRef(state),nextSession=useRef(0),panelRef=useRef(null);
   const scenarioBaseline=useRef(null);
@@ -109,10 +110,10 @@ export default function App() {
     try{return accept({events:upsertCondition(latest.current.events,editCondition(old,d,latest.current.patient.weight,convertToStandardUnit)),entryMinute:minute},'edit-'+session);}
     catch(error){report(error);return false;}
   };
-  const openEdit=e=>{history.current.endGroup();setEditing(e.id);setMinute(e.time);setEditSession(++nextSession.current);
-    panelRef.current?.scrollIntoView({block:'start',behavior:'smooth'});};
+  const openEdit=e=>{if(e.type==='infusion'&&legacyStreams(latest.current.events,e.drug)){setInputError('simpleLegacyStreams');return;}
+    history.current.endGroup();setEditing(e.id);setEditSession(++nextSession.current);};
   const remove=id=>{try{if(accept({events:deleteCondition(latest.current.events,id)}))done();}catch(error){report(error);}};
-  const undo=direction=>{done();setEditSession(++nextSession.current);
+  const undo=direction=>{done();setCaseNotice(false);setEditSession(++nextSession.current);
     const s=direction==='undo'?history.current.undo():history.current.redo();latest.current=s;setState(s);setPatientDraft(s.patient);setMinute(s.entryMinute??minute);setInputError('');setCurrentScenarioId(null);};
   const saveScenario=(id=null,name=null)=>{
     const data=validateSimpleSnapshot(latest.current);delete data.savedScenarios;delete data.savedTraces;
@@ -121,9 +122,18 @@ export default function App() {
       scenarioBaseline.current=caseFingerprint(latest.current);setCurrentScenarioId(entry.id);
     }
   };
-  const restore=(d,preserveLibrary=true)=>{const loaded=hydrate(d);
+  const restore=(d,preserveLibrary=true)=>{const loaded=hydrate(d);setCaseNotice(false);
     if(accept({...loaded,savedScenarios:preserveLibrary?state.savedScenarios:loaded.savedScenarios,savedTraces:preserveLibrary?state.savedTraces:loaded.savedTraces})){done();setEditSession(++nextSession.current);setMinute(loaded.entryMinute);setPatientDraft(loaded.patient);setCurrentScenarioId(null);return true;}return false;};
   const loadScenario=s=>{try{if(restore(s.data)){scenarioBaseline.current=caseFingerprint(latest.current);setCurrentScenarioId(s.id);}}catch{setInputError('savedStateInvalid');}};
+  const newCase=()=>{
+    if(!storageReady||storageError)return;
+    try{const fresh=freshCase(),next=newCaseWithArchive(latest.current,fresh,{id:newEventId(),
+      name:t('caseBeforeNew',{time:new Date().toLocaleString(i18n.language)}),timestamp:Date.now()});
+      calculate(next);writeSimpleStorage(localStorage,next);
+      if(accept(next)){done();setEditSession(++nextSession.current);setMinute(next.entryMinute);setPatientDraft(next.patient);
+        setCurrentScenarioId(null);scenarioBaseline.current=null;setCaseNotice(true);}
+    }catch{setInputError('saveFailed');}
+  };
   const exportData=()=>{
     const payload={current:latest.current,original:localStorage.getItem(BACKUP_KEY)??localStorage.getItem(LEGACY_KEY)};
     const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
@@ -148,12 +158,15 @@ export default function App() {
       lastSavedAt={lastSavedAt} isDark={isDark} setIsDark={setIsDark}/>
     <main className="simple-main">
       {(inputError||storageError)&&<div role="alert" className="error-banner">{[inputError,storageError].filter(Boolean).map(key=><p key={key}>{t(key)}</p>)}</div>}
-      <div ref={panelRef} className="input-anchor"><SimpleDosePanel drug={state.drug} onDrug={drug=>{done();accept({drug});}}
+      <div ref={panelRef} className="input-anchor">
+        <div className="case-workflow"><button type="button" className="quiet-button new-case-button" data-testid="new-case" disabled={!storageReady||!!storageError} onClick={newCase}>{t('simpleNewCase')}</button>
+          <span className="muted">{caseNotice?t('caseStartedSafely'):t('newCaseHint')}</span>
+          <div className="undo-strip"><button type="button" className="quiet-button" disabled={!history.current.canUndo} onClick={()=>undo('undo')}>{t('simpleUndo')}</button>
+            <button type="button" className="quiet-button" disabled={!history.current.canRedo} onClick={()=>undo('redo')}>{t('simpleRedo')}</button></div></div>
+        <SimpleDosePanel drug={state.drug} onDrug={drug=>{done();accept({drug});}}
         patient={state.patient} patientValid={isValidPatient(patientDraft)&&JSON.stringify(patientDraft)===JSON.stringify(state.patient)}
         events={state.events} minute={minute} onMinute={setMinute} startTime={start} onNow={entryNow}
-        editingEvent={editingEvent} editSession={editSession} onAdd={add} onEdit={edit} onDone={done} t={t}/></div>
-      <div className="undo-strip"><button type="button" className="quiet-button" disabled={!history.current.canUndo} onClick={()=>undo('undo')}>{t('simpleUndo')}</button>
-        <button type="button" className="quiet-button" disabled={!history.current.canRedo} onClick={()=>undo('redo')}>{t('simpleRedo')}</button></div>
+        editingEvent={null} editSession={editSession} onAdd={add} onEdit={edit} onDone={done} t={t}/></div>
       {(model.includes('Scaled')||(state.drug==='Hydromorphone'&&model==='Standard (Adult)'))&&<p className="muted">{t('unsourcedModelNote')}</p>}
       {state.patient.age<12&&(model.includes('Adult')||model.includes('General-purpose'))&&<p className="muted">{t('populationLimitNote')}</p>}
       {params?.ke0===0&&<p className="muted">{t('ceUnavailable')}</p>}
@@ -161,9 +174,12 @@ export default function App() {
         events={state.events} model={model} modelChoice={state.modelByDrug[state.drug]||'auto'}
         onModelChoice={choice=>accept({modelByDrug:chooseModel(state.modelByDrug,state.drug,choice)})}
         onRange={range=>accept({plotStart:range.start,simDuration:range.end,manualRange:true},'range')} showRanges={showRanges}
-        thresholds={{...THERAPEUTIC_RANGES[state.drug],...state.therapeuticOverrides[state.drug]}} savedTraces={visibleTraces} t={t}/>
+        thresholds={{...THERAPEUTIC_RANGES[state.drug],...state.therapeuticOverrides[state.drug]}} savedTraces={visibleTraces}
+        patient={state.patient} onSelectEvent={openEdit} t={t}>
+        <SimpleHistory events={state.events} drug={state.drug} patient={state.patient} startTime={start} onEdit={openEdit} onDelete={remove}
+          editingId={editing} editingEvent={editingEvent} editSession={editSession} onApply={edit} onDone={done} t={t}/>
+      </SimpleGraph>
       {state.events.some(e=>e.drug===state.drug&&(e.time<state.plotStart||e.time>state.simDuration))&&<p className="muted">{t('simpleOutsideRange')}</p>}
-      <SimpleHistory events={state.events} drug={state.drug} patient={state.patient} startTime={start} onEdit={openEdit} onDelete={remove} editingId={editing} t={t}/>
       <details className="advanced-panel"><summary>{t('simpleDetails')}</summary><div className="advanced-content">
         <button className="quiet-button" onClick={()=>setReferenceOpen(true)}>{t('viewLiteratureLabel')}</button>
         {params&&<dl className="parameter-list">{['V1','V2','V3','Cl','Q2','Q3','ke0'].map(k=><div key={k}><dt>{k}</dt><dd>{Number(params[k]).toPrecision(4)}</dd></div>)}</dl>}
@@ -175,7 +191,6 @@ export default function App() {
         {!!state.savedTraces.length&&<label><input type="checkbox" checked={showTraces} onChange={e=>setShowTraces(e.target.checked)}/>{t('simpleShowCurves')} ({state.savedTraces.length})</label>}
         {legacyStreams(state.events,state.drug)&&<p>{t('simpleLegacyStreams')}</p>}
         <p className="muted">{t('simpleStorageNote')}</p>
-        <button className="quiet-button" onClick={()=>restore(freshCase())}>{t('simpleNewCase')}</button>
       </div></details>
       <TherapeuticReferenceModal open={referenceOpen} onClose={()=>setReferenceOpen(false)} drug={state.drug} t={t}/>
     </main>
