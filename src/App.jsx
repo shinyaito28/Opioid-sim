@@ -19,6 +19,7 @@ import {estimateGrowth} from './lib/growth.js';
 import {graphSampleStart} from './lib/graphContext.js';
 import {scrollApplicationBy} from './lib/appViewport.js';
 import {newCaseWithArchive} from './lib/caseDraft.js';
+import {fitGraphRange} from './lib/graphFit.js';
 
 function freshCase() {
   const now=new Date(),start=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
@@ -173,7 +174,9 @@ export default function App() {
       <SimpleGraph key={state.drug} data={data} drug={state.drug} startTime={start} currentMinute={currentMinute} range={{start:state.plotStart,end:state.simDuration}}
         events={state.events} model={model} modelChoice={state.modelByDrug[state.drug]||'auto'}
         onModelChoice={choice=>accept({modelByDrug:chooseModel(state.modelByDrug,state.drug,choice)})}
-        onRange={range=>accept({plotStart:range.start,simDuration:range.end,manualRange:true},'range')} showRanges={showRanges}
+        onRange={range=>accept({plotStart:range.start,simDuration:range.end,manualRange:true},'range')}
+        onFit={()=>{history.current.endGroup();const range=fitGraphRange(latest.current.events,latest.current.drug);
+          accept({plotStart:range.start,simDuration:range.end,manualRange:true});history.current.endGroup();}} showRanges={showRanges}
         thresholds={{...THERAPEUTIC_RANGES[state.drug],...state.therapeuticOverrides[state.drug]}} savedTraces={visibleTraces}
         patient={state.patient} onSelectEvent={openEdit} t={t}>
         <SimpleHistory events={state.events} drug={state.drug} patient={state.patient} startTime={start} onEdit={openEdit} onDelete={remove}

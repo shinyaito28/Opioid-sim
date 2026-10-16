@@ -6,12 +6,14 @@ import { DRUG_DISPLAY,DRUG_COLORS,AVAILABLE_MODELS } from '../lib/drugs.js';
 import {concentrationBand,suggestedYAxisMax,yAxisSlider,yAxisFromSlider} from '../lib/graphScale.js';
 import {doseMarkers,eventDescription,markerClock} from '../lib/doseMarkers.js';
 import DoseMarkerValues from './DoseMarkerValues';
+import {xAxisSlider,xAxisFromSlider} from '../lib/graphFit.js';
 
 export default function SimpleGraph({data,drug,startTime,currentMinute,range,onRange,showRanges,thresholds,savedTraces,
-  events,model,modelChoice,onModelChoice,patient,onSelectEvent,children,t}) {
+  events,model,modelChoice,onModelChoice,patient,onSelectEvent,onFit,children,t}) {
   const display=DRUG_DISPLAY[drug]||{unit:'ng/mL',divisor:1},divisor=display.divisor||1,colors=DRUG_COLORS[drug];
   const clock=value=>{const p=clockParts(value,startTime);return p.hour+':'+p.minute;};
   const displayRange=graphDisplayRange(range);
+  const xSlider=xAxisSlider(range);
   const context=graphContext({range:displayRange,startTime,currentMinute,events,drug});
   const chartData=useMemo(()=>data.map(p=>({...p,cp:p.cp/divisor,ce:p.ce==null?null:p.ce/divisor})),[data,divisor]);
   const band=concentrationBand(drug,thresholds,divisor);
@@ -99,14 +101,11 @@ export default function SimpleGraph({data,drug,startTime,currentMinute,range,onR
       </label>
       <button type="button" className="quiet-button" aria-pressed={axisMax===null} onClick={()=>setAxisMax(null)}>{t('graphAuto')}</button>
     </div>
-    <div className="graph-range">
-      <label className="range-bar"><span className="field-label">{t('simpleRange')}</span>
-        <input type="range" aria-label={t('simpleRange')} min={Math.sqrt(30)} max={Math.sqrt(1440)} step="0.1"
-          value={Math.sqrt(Math.max(30,range.end))} onChange={e=>{
-            const end=Math.max(30,Math.min(1440,Math.round(Number(e.target.value)**2/10)*10));
-            onRange({start:Math.min(range.start,end-1),end});
-          }}/>
-      </label>
+    <div className="graph-range graph-x-controls" data-testid="graph-x-controls">
+      <div className="x-range-heading"><label className="field-label" htmlFor="graph-x-range">{t('simpleRange')}</label>
+        <button type="button" className="quiet-button graph-fit-button" data-testid="graph-fit" title={t('graphFitHelp')} onClick={onFit}>{t('graphFit')}</button></div>
+      <div className="range-bar"><input id="graph-x-range" type="range" aria-label={t('simpleRange')} min={xSlider.min} max={xSlider.max} step="0.1"
+        value={xSlider.value} onChange={e=>{const next=xAxisFromSlider(e.target.value,xSlider);if(next)onRange(next);}}/></div>
     </div>
     <details className="range-details"><summary>{t('simpleExactRange')}</summary>
       <div className="range-numbers">

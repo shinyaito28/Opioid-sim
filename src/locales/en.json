@@ -334,6 +334,8 @@
   "markerLane": "Dose times below the chart",
   "markerHint": "▼ Dose time · # matches the values below · outline: future time. Infusion values are rates. Select to edit.",
   "markerValues": "Dose amounts and infusion rates",
+  "graphFit": "Fit to data",
+  "graphFitHelp": "Fit the displayed drug's records, with an hour of prediction after the last change or finite infusion end (within the 24-hour limit). Dose times and the case clock stay unchanged.",
   "markerBolus": "Bolus",
   "markerStart": "Infusion start",
   "markerChange": "Rate change",

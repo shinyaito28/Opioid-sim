@@ -281,6 +281,10 @@ html[data-standalone="true"] .app-topbar { padding-top:8px; }
 .inline-edit-footer .quiet-button { font-size:12px; padding:6px 10px; }
 .axis-controls { display:grid; grid-template-columns:1fr 1fr; gap:0 18px; }
 .axis-controls .range-details { grid-column:1/-1; margin-top:0; }
+.graph-x-controls { display:grid; grid-template-columns:minmax(0,1fr); gap:0; }
+.x-range-heading { display:flex; justify-content:space-between; align-items:center; gap:4px; min-width:0; }
+.x-range-heading .field-label { min-width:0; margin-bottom:0; }
+.simple-app .graph-fit-button { min-height:44px; padding:6px 7px; font-size:11px; line-height:1.4; flex-shrink:0; }
 .dark .quick-editor-anchor { background:#082f49; border-color:#075985; }
 .dark .quick-edit-title { color:#7dd3fc; }
 .dark .marker-help,.dark .marker-detail small { color:#94a3b8; }
